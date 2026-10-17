@@ -37,6 +37,7 @@ import {
   PHONE_H,
   PHONE_W,
   SPLIT_MENU_SLOT,
+  SLIDER_DEFAULT_VALUE,
   TRACK_DEFAULT,
   TRACK_MAX,
   TRACK_MIN,
@@ -53,7 +54,6 @@ import {
   carouselCountOf,
   chipHeightOf,
   dateLayoutOf,
-  defaultTabsFor,
   extendedFabHeight,
   fabTypePatch,
   frameLengthOf,
@@ -342,12 +342,6 @@ export function MobileInspector({
       return;
     }
     onChange(setIconSlot(item, key, icon));
-  };
-  const setTabCount = (n: number) => {
-    const defaults = defaultTabsFor(item.kind);
-    const next: NavTab[] = [];
-    for (let i = 0; i < n; i++) next.push((item.tabs ?? [])[i] ? { ...item.tabs![i] } : { ...defaults[i % defaults.length] });
-    onChange({ tabs: next, selected: item.selected !== undefined && item.selected >= n ? undefined : item.selected });
   };
   const isSelect = kind === "select";
   const tabsList: NavTab[] = item.tabs ?? [];
@@ -674,6 +668,7 @@ export function MobileInspector({
                 onChange={(layout) => onChange({ layout })}
                 p={p}
                 height={44}
+                label={t("layout", lang)}
               />
             </Row>
           )}
@@ -685,6 +680,7 @@ export function MobileInspector({
                 onChange={(layout) => onChange({ layout })}
                 p={p}
                 height={44}
+                label={t("layout", lang)}
               />
             </Row>
           )}
@@ -732,7 +728,7 @@ export function MobileInspector({
           )}
           {kind === "slider" && (
             <Row icon="tune" label={t("state", lang)} p={p}>
-              <Slider icon="percent" title={t("progressState", lang)} value={item.value ?? 50} min={0} max={100} step={1} onChange={(value) => onChange({ value })} p={p} unit="%" />
+              <Slider icon="percent" title={t("progressState", lang)} value={item.value ?? SLIDER_DEFAULT_VALUE} min={0} max={100} step={1} onChange={(value) => onChange({ value })} p={p} unit="%" />
             </Row>
           )}
 
