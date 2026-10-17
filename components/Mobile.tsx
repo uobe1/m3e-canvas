@@ -16,6 +16,27 @@ export function BottomSheet({ p, onClose, children }: { p: Palette; onClose: () 
   const lang = useLang();
   const coarse = useCoarse();
   const controls = useDragControls();
+  /* the phone keyboard takes the bottom of the screen away: the sheet stands up out of its way
+   * by that much, keeping the row being typed in where the thumb already is */
+  const [kb, setKb] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    let chrome = 0; // the browser's own bar, seen before any keyboard opens
+    const read = () => {
+      const gap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      if (chrome === 0) chrome = gap;
+      const rise = gap - chrome;
+      setKb(rise > 120 ? Math.round(rise) : 0);
+    };
+    read();
+    vv.addEventListener("resize", read);
+    vv.addEventListener("scroll", read);
+    return () => {
+      vv.removeEventListener("resize", read);
+      vv.removeEventListener("scroll", read);
+    };
+  }, []);
   return (
     <motion.div
       initial={{ y: "100%" }}
@@ -31,11 +52,18 @@ export function BottomSheet({ p, onClose, children }: { p: Palette; onClose: () 
       onDragEnd={(_, info) => {
         if (info.offset.y > 90 || info.velocity.y > 600) onClose();
       }}
+      onFocusCapture={(e) => {
+        const el = e.target as HTMLElement | null;
+        if (!el || (!/^(INPUT|TEXTAREA)$/.test(el.tagName) && !el.isContentEditable)) return;
+        /* the field the keyboard would otherwise sit on goes to the middle of what is left */
+        el.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+      }}
       style={{
         position: "absolute",
         left: 0,
         right: 0,
-        bottom: 0,
+        bottom: kb,
+        transition: "bottom 160ms ease",
         maxHeight: "72%",
         display: "flex",
         flexDirection: "column",
