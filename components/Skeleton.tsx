@@ -112,9 +112,6 @@ export function Skeleton() {
           <div className="m3e-skel-tools m3e-skel-mobile">
             <Pill icons={5} size={42} tail={112} />
           </div>
-          <span className="m3e-skel-mobile">
-            <Bone w={180} h={10} r={5} style={{ position: "absolute", left: "50%", top: 84, transform: "translateX(-50%)" }} />
-          </span>
           <span className="m3e-skel-desk">
             <Pill icons={0} tail={104} style={{ position: "absolute", left: 22, bottom: 22 }} />
             <Pill icons={3} style={{ position: "absolute", right: 22, bottom: 22 }} />

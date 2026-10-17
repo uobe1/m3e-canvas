@@ -81,7 +81,7 @@ const THUMB_H = 28;
 /** the wave is shortened for the picture, so a thumbnail this small still reads as a wave */
 const THUMB_WAVELENGTH = 13;
 
-function ProgressThumb({ look, on, p }: { look: ProgressLook; on: boolean; p: Palette }) {
+export function ProgressThumb({ look, on, p }: { look: ProgressLook; on: boolean; p: Palette }) {
   const ink = on ? p.onPrimary : p.onSurfaceVariant;
   const track = on ? p.onPrimary : p.outlineVariant;
   const stroke = { fill: "none", strokeWidth: 2.8, strokeLinecap: "round" as const };
@@ -106,7 +106,7 @@ function ProgressThumb({ look, on, p }: { look: ProgressLook; on: boolean; p: Pa
 
 /** Those four as one connected run, each cell a picture of what it makes and nothing else: the
  *  drawing is the label. Picking one sets the shape and the wave together. */
-function ProgressTypePicker({ item, onChange, p }: { item: Item; onChange: Change; p: Palette }) {
+export function ProgressTypePicker({ item, onChange, p }: { item: Item; onChange: Change; p: Palette }) {
   const lang = useLang();
   const current = PROGRESS_LOOKS.find((l) => l.kind === item.kind && l.wavy === !!item.wavy) ?? PROGRESS_LOOKS[0];
   return (
@@ -131,7 +131,7 @@ function ProgressTypePicker({ item, onChange, p }: { item: Item; onChange: Chang
 /** What the indicator is saying, as two icons standing on their own at the start of the row: the
  *  loop it circles in with no end in sight, or the share it counts up to -- and that share is the
  *  slider that fills the rest of the row, which is there only when there is a share to set. */
-function ProgressValue({ item, onChange, p }: { item: Item; onChange: Change; p: Palette }) {
+export function ProgressValue({ item, onChange, p }: { item: Item; onChange: Change; p: Palette }) {
   const lang = useLang();
   const pct = item.value !== undefined;
   return (
@@ -159,7 +159,7 @@ function ProgressValue({ item, onChange, p }: { item: Item; onChange: Change; p:
 
 /** A layout drawn as the row of cards it actually makes: the same widths the part is built from,
  *  read as shares of the row, so the picture in the cell is the arrangement itself. */
-function CarouselThumb({ layout, on, p }: { layout: CarouselLayout; on: boolean; p: Palette }) {
+export function CarouselThumb({ layout, on, p }: { layout: CarouselLayout; on: boolean; p: Palette }) {
   const shares = cardWidths(layout, 100, 4);
   const ink = on ? p.onPrimary : p.onSurfaceVariant;
   return (
@@ -173,7 +173,7 @@ function CarouselThumb({ layout, on, p }: { layout: CarouselLayout; on: boolean;
 
 /** M3's four arrangements as one connected run of those pictures, with no words: the drawing
  *  says how the cards are laid out better than "multi-browse" ever could. */
-function CarouselLayoutPicker({ item, onChange, p }: { item: Item; onChange: Change; p: Palette }) {
+export function CarouselLayoutPicker({ item, onChange, p }: { item: Item; onChange: Change; p: Palette }) {
   const lang = useLang();
   const current = carouselLayoutOf(item);
   return (
@@ -195,7 +195,7 @@ function CarouselLayoutPicker({ item, onChange, p }: { item: Item; onChange: Cha
 /** The cards themselves as one connected run: each cell shows the picture that card carries, or
  *  its number while it has none, and the one picked out is the card the controls under it -- and
  *  the trigger tab -- are about. A card a tap is sent from wears the run's own mark. */
-function CardStrip({ item, selected, onSelect, p }: { item: Item; selected: number; onSelect: (i: number) => void; p: Palette }) {
+export function CardStrip({ item, selected, onSelect, p }: { item: Item; selected: number; onSelect: (i: number) => void; p: Palette }) {
   const lang = useLang();
   const cards = carouselCardsOf(item);
   return (
@@ -227,7 +227,7 @@ function CardStrip({ item, selected, onSelect, p }: { item: Item; selected: numb
 
 /** the places a bar can be tapped, as one connected run: the icons at its ends, or the entries
  *  along it, each cell the icon the place shows and a mark when a tap has been sent from it */
-function SlotStrip({ item, selected, onSelect, p }: { item: Item; selected: string; onSelect: (k: string) => void; p: Palette }) {
+export function SlotStrip({ item, selected, onSelect, p }: { item: Item; selected: string; onSelect: (k: string) => void; p: Palette }) {
   const lang = useLang();
   const slots = actionSlotsOf(item);
   /* a tab's words are too long for a cell: the cell carries its number and the words are the hover text */
@@ -247,7 +247,7 @@ function SlotStrip({ item, selected, onSelect, p }: { item: Item; selected: stri
 
 /** A choice's state, as the control itself drawn as an icon beside its words: one tap turns it
  *  on or off, and the icon is the whole of what changes -- a switch's icon slides across. */
-function ChoiceToggle({ item, onChange, p }: { item: Item; onChange: Change; p: Palette }) {
+export function ChoiceToggle({ item, onChange, p }: { item: Item; onChange: Change; p: Palette }) {
   const lang = useLang();
   const on = !!item.checked;
   const icon = item.kind === "switch" ? (on ? "toggle_on" : "toggle_off") : item.kind === "checkbox" ? (on ? "check_box" : "check_box_outline_blank") : on ? "radio_button_checked" : "radio_button_unchecked";
@@ -266,7 +266,7 @@ function ChoiceToggle({ item, onChange, p }: { item: Item; onChange: Change; p: 
 }
 
 /** the words on a part: its label, and the second line it may carry under it */
-function TextRows({ item, onChange, p, labelKey = "label", supportingKey = "supporting", paragraph = false, bold = false }: { item: Item; onChange: Change; p: Palette; labelKey?: "label" | "title" | "message"; supportingKey?: "supporting" | "action" | "body"; paragraph?: boolean; bold?: boolean }) {
+export function TextRows({ item, onChange, p, labelKey = "label", supportingKey = "supporting", paragraph = false, bold = false }: { item: Item; onChange: Change; p: Palette; labelKey?: "label" | "title" | "message"; supportingKey?: "supporting" | "action" | "body"; paragraph?: boolean; bold?: boolean }) {
   const lang = useLang();
   const spec = KIND_SPEC[item.kind];
   return (
@@ -310,7 +310,7 @@ function TextRows({ item, onChange, p, labelKey = "label", supportingKey = "supp
 }
 
 /** the size of a line of text: the M3 type scale it stands on, and the sp between its steps */
-function TextSizeRows({ item, onChange, p }: { item: Item; onChange: Change; p: Palette }) {
+export function TextSizeRows({ item, onChange, p }: { item: Item; onChange: Change; p: Palette }) {
   const lang = useLang();
   const spec = KIND_SPEC[item.kind];
   const size = item.size ?? spec.defSize ?? 28;
@@ -331,7 +331,7 @@ function TextSizeRows({ item, onChange, p }: { item: Item; onChange: Change; p: 
 }
 
 /** a navigation rail's two states and where the expanded one goes: pictures of the rail itself */
-function RailThumb({ expanded, modal, on, p }: { expanded: boolean; modal?: boolean; on: boolean; p: Palette }) {
+export function RailThumb({ expanded, modal, on, p }: { expanded: boolean; modal?: boolean; on: boolean; p: Palette }) {
   const ink = on ? p.onPrimary : p.onSurfaceVariant;
   return (
     <span aria-hidden style={{ display: "flex", width: 44, height: 26, borderRadius: 4, overflow: "hidden", border: `1.5px solid ${ink}`, boxSizing: "border-box", position: "relative" }}>
@@ -341,7 +341,7 @@ function RailThumb({ expanded, modal, on, p }: { expanded: boolean; modal?: bool
   );
 }
 
-function RailRows({ item, onChange, p, standalone }: { item: Item; onChange: Change; p: Palette; standalone: boolean }) {
+export function RailRows({ item, onChange, p, standalone }: { item: Item; onChange: Change; p: Palette; standalone: boolean }) {
   const lang = useLang();
   const wide = isWideRail(item);
   const value = !wide ? "" : item.railExpanded ? (item.railModal ? "modal" : "expanded") : "collapsed";

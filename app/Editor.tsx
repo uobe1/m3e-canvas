@@ -134,7 +134,8 @@ import { ShareDialog } from "@/components/ShareMenu";
 import { ColorPanel } from "@/components/ColorPanel";
 import { MotionPanel, ShapePanel, TypePanel } from "@/components/ThemePanel";
 import { ThemeContext, ensureFontLoaded, ensureLangFontLoaded } from "@/lib/theme";
-import { BottomSheet, MobileActionBar, MobileInspector, MobileLang, MobileSettings } from "@/components/Mobile";
+import { BottomSheet, MobileActionBar, MobileLang, MobileSettings } from "@/components/Mobile";
+import { MobileFrameEditor, MobileInspector, MobileLayersSheet, MobileMultiPanel, MobilePartsSheet, MobilePromptSheet, MobileScreensSheet } from "@/components/MobilePanels";
 import { ConfirmDialog, IconBtn, Segmented } from "@/components/ui";
 import { Lang, LangContext, SEED_TEXT, getLang, setGlobalLang, t, translateDefaultFrameName, translateDefaultText } from "@/lib/i18n";
 
@@ -211,6 +212,13 @@ type DragState = {
   settling: boolean;
   /** let go where it cannot land: the ghost shrinks away before the state is cleared */
   vanishing: boolean;
+};
+
+/** the phone's bottom sheet: which panel is up, and which screen it is about */
+type MobileSheet = {
+  kind: "edit" | "theme" | "lang" | "parts" | "layers" | "screens" | "prompt" | "screen" | "swipe";
+  frameId?: string;
+  dir?: "left" | "right" | "up" | "down";
 };
 
 type Gesture =
@@ -492,7 +500,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
    * arms long-presses or sizes a hit box listens to `coarse`; everything that picks the
    * phone chrome listens to `isMobile`. */
   const [coarse, setCoarse] = useState(false);
-  const [sheet, setSheet] = useState<"edit" | "settings" | "lang" | null>(null);
+  const [sheet, setSheet] = useState<MobileSheet | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   /** frame being rendered offscreen for the PNG export */
   const [exportFrame, setExportFrame] = useState<Frame | null>(null);
@@ -601,6 +609,9 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   frameRef.current = frame;
   const mobileRef = useRef(isMobile);
   mobileRef.current = isMobile;
+  const sheetRef = useRef(sheet);
+  sheetRef.current = sheet;
+  const lastKindRef = useRef<Kind | null>(null);
   const coarseRef = useRef(coarse);
   coarseRef.current = coarse;
   /** active touch points, for pinch zoom */
@@ -2114,10 +2125,6 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     return drag?.item.id === primaryId ? (drag?.item ?? null) : null;
   }, [groups, primaryId, drag]);
 
-  useEffect(() => {
-    if (!selected && sheet === "edit") setSheet(null);
-  }, [selected, sheet]);
-
   /** Resizing a lone part keeps whatever it was lined up with on the frame:
    *  its centre on the centre line, or its far edge on the margin or screen edge.
    *  Otherwise the near (left / top) edge stays put, as the sliders always did. */
@@ -2672,6 +2679,10 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     () => frames.find((f) => f.id === selectedFrameId) ?? null,
     [frames, selectedFrameId],
   );
+
+  useEffect(() => {
+    if (!selected && !selectedFrame && sheet?.kind === "edit") setSheet(null);
+  }, [selected, selectedFrame, sheet]);
   const selectedMinLength = useMemo(
     () => (selectedFrame ? minFrameLength(groups, selectedFrame, frames, widths) : 0),
     [groups, selectedFrame, frames, widths],
@@ -2755,7 +2766,10 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     const item = makeItem(kind);
     const sz = sizeOf(item, widthsRef.current);
     const cx = ((r?.width ?? 0) / 2 - v.x) / v.z;
-    const cy = ((r?.height ?? 0) / 2 - v.y) / v.z;
+    /* while the parts sheet is up the lower part of the view is its floor -- land in the
+     * visible band above it, so a tap-add never drops a part out of sight under the sheet */
+    const sheetCovers = mobileRef.current && sheetRef.current !== null;
+    const cy = (((r?.height ?? 0) * (sheetCovers ? 0.14 : 0.5)) - v.y) / v.z;
     /* screens are hidden on a blank canvas; the phone shows one screen at a time, so its plus
      * button always means that screen */
     const f =
@@ -2785,7 +2799,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     setSelectedIds([item.id]);
     setSelectedFrameId(null);
     setRightTab("edit");
-    setSheet(null);
+    lastKindRef.current = kind;
   };
 
   const changeFrame = (f: FrameMode) => {
@@ -4606,8 +4620,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
             quickUndo={quickUndo}
             rightInset={showRight ? rightW : 0}
             mobile={isMobile}
-            onSettings={() => setSheet(sheet === "settings" ? null : "settings")}
-            onLangSheet={() => setSheet(sheet === "lang" ? null : "lang")}
+            onSettings={() => setSheet(sheet?.kind === "theme" ? null : { kind: "theme" })}
+            onLangSheet={() => setSheet(sheet?.kind === "lang" ? null : { kind: "lang" })}
             onPrompt={async () => {
               try {
                 await navigator.clipboard.writeText(effectivePrompt(doc, widths, lang));
@@ -4616,30 +4630,11 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
             }}
           />
 
-          {isMobile && (
-            <div
-              style={{
-                position: "absolute",
-                left: 0,
-                right: 0,
-                top: 80,
-                textAlign: "center",
-                fontSize: 11,
-                lineHeight: 1.4,
-                color: p.onSurfaceVariant,
-                pointerEvents: "none",
-                zIndex: 40,
-              }}
-            >
-              {t("mobileNote", lang)}
-            </div>
-          )}
-
-          {isMobile && sheet === null && (
+          {isMobile && !sheet && (
             <button
-              onClick={() => addPart("button")}
-              title={t("addButton", lang)}
-              aria-label={t("addButton", lang)}
+              onClick={() => setSheet({ kind: "parts" })}
+              title={t("parts", lang)}
+              aria-label={t("parts", lang)}
               className="m3-press"
               style={{
                 position: "absolute",
@@ -4662,46 +4657,193 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
             </button>
           )}
 
-          {isMobile && selected && sheet === null && (
+          {isMobile && (selected || selectedIds.length > 1 || selectedFrame) && !sheet && (
             <MobileActionBar
               p={p}
-              onEdit={() => setSheet("edit")}
+              onEdit={() => setSheet({ kind: "edit" })}
               onDuplicate={duplicateSelected}
               onDelete={deleteSelected}
             />
           )}
 
           <AnimatePresence>
-            {isMobile && sheet === "edit" && selected && (
-              <BottomSheet key="edit" p={p} onClose={() => setSheet(null)}>
-                <MobileInspector
-                  item={selected}
-                  palette={p}
-                  onChange={patchSelected}
-                  onDelete={() => {
-                    deleteSelected();
-                    setSheet(null);
-                  }}
-                  onDuplicate={duplicateSelected}
-                  onClose={() => setSheet(null)}
-                />
-              </BottomSheet>
-            )}
-            {isMobile && sheet === "settings" && (
-              <BottomSheet key="settings" p={p} onClose={() => setSheet(null)}>
-                <MobileSettings palette={p} paletteKey={paletteKey} onPalette={setPaletteKey} theme={theme} onTheme={patchTheme} />
-              </BottomSheet>
-            )}
-            {isMobile && sheet === "lang" && (
-              <BottomSheet key="lang" p={p} onClose={() => setSheet(null)}>
-                <MobileLang
-                  palette={p}
-                  lang={lang}
-                  onLang={(l) => {
-                    changeLanguage(l);
-                    setSheet(null);
-                  }}
-                />
+            {isMobile && sheet && (
+              <BottomSheet key={sheet.kind + (sheet.frameId ?? "")} p={p} onClose={() => setSheet(null)}>
+                {sheet.kind === "edit" &&
+                  (selectedIds.length > 1 ? (
+                    <MobileMultiPanel
+                      p={p}
+                      count={selectedIds.length}
+                      grouped={!!selectedGroup}
+                      locked={selectedLocked}
+                      onToggleLock={toggleLockSelected}
+                      onDuplicate={duplicateSelected}
+                      onDelete={() => {
+                        deleteSelected();
+                        setSheet(null);
+                      }}
+                      onGroup={groupSelected}
+                      onUngroup={ungroupSelected}
+                      onPlace={selectionPlaceable ? placeSelected : undefined}
+                      onClose={() => setSheet(null)}
+                    />
+                  ) : selected ? (
+                    <MobileInspector
+                      ai={{
+                        ready: aiReady && !!tidyTarget,
+                        reason: aiReason,
+                        busy: aiBusy,
+                        onRun: () => {
+                          if (tidyTarget && selected) runAi("behavior", tidyTarget, selected.id);
+                        },
+                        onCancel: cancelAi,
+                      }}
+                      item={selected}
+                      palette={p}
+                      frames={frame === "phone" ? frames : []}
+                      frame={selectedPartFrame}
+                      onChange={patchSelected}
+                      onDelete={() => {
+                        deleteSelected();
+                        setSheet(null);
+                      }}
+                      onDuplicate={duplicateSelected}
+                      onClose={() => setSheet(null)}
+                      locked={selectedLocked}
+                      onToggleLock={toggleLockSelected}
+                      grouped={!!selectedGroup}
+                      onGroup={groupSelected}
+                      onUngroup={ungroupSelected}
+                      onPlace={selectionPlaceable ? placeSelected : undefined}
+                      measured={widths[selected.id]}
+                      selfRect={selectedRect}
+                      allFrames={frames}
+                      onShowOn={onShowOn}
+                      onShowMenu={onShowMenu}
+                      railStandalone={groups.some((g) => g.items.length === 1 && g.items[0].id === selected.id)}
+                    />
+                  ) : selectedFrame ? (
+                    <MobileFrameEditor
+                      frame={selectedFrame}
+                      palette={p}
+                      onChange={(patch) => patchFrame(selectedFrame.id, patch)}
+                      onDelete={() => {
+                        deleteFrame(selectedFrame.id);
+                        setSheet(null);
+                      }}
+                      onDuplicate={() => duplicateFrame(selectedFrame.id)}
+                      onPreview={() => openPreview(selectedFrame.id)}
+                      prompt={buildPrompt(doc, widths, selectedFrame.id, lang)}
+                      onSaveImage={() => saveFrameImage(selectedFrame)}
+                      tidy={tidyState ?? "done"}
+                      onTidy={() => tidy(selectedFrame)}
+                      onPlace={(pl) => setPlace(selectedFrame, pl)}
+                      minLength={selectedMinLength}
+                      onLength={(length) => setFrameLength(selectedFrame.id, length)}
+                      ai={{ ready: aiReady, reason: aiReason, busy: aiBusy && aiFrameId === selectedFrame.id, onRun: () => runAi("describe", selectedFrame), onCancel: cancelAi }}
+                      onSize={(preset) => setFramePreset(selectedFrame.id, preset)}
+                      onClose={() => setSheet(null)}
+                    />
+                  ) : null)}
+                {sheet.kind === "theme" && <MobileSettings palette={p} paletteKey={paletteKey} onPalette={setPaletteKey} theme={theme} onTheme={patchTheme} />}
+                {sheet.kind === "lang" && (
+                  <MobileLang
+                    palette={p}
+                    lang={lang}
+                    onLang={(l) => {
+                      changeLanguage(l);
+                      setSheet(null);
+                    }}
+                  />
+                )}
+                {sheet.kind === "parts" && (
+                  <MobilePartsSheet
+                    p={p}
+                    favorites={favorites}
+                    onToggleFavorite={(k) => setFavorites((f) => (f.includes(k) ? f.filter((x) => x !== k) : [...f, k]))}
+                    onAdd={addPart}
+                  />
+                )}
+                {sheet.kind === "layers" && (
+                  <MobileLayersSheet
+                    p={p}
+                    groups={layerGroups}
+                    widths={widths}
+                    selectedIds={selectedIds}
+                    onSelect={(ids) => {
+                      setSelectedIds(ids);
+                      setSelectedFrameId(null);
+                      setSelectedLinkId(null);
+                    }}
+                    onToggleLock={toggleGroupLock}
+                    onReorder={reorderLayers}
+                  />
+                )}
+                {sheet.kind === "screens" && (
+                  <MobileScreensSheet
+                    p={p}
+                    frames={frames}
+                    currentId={selectedFrameId ?? frames[0]?.id ?? null}
+                    onSelect={(id) => {
+                      const f = framesRef.current.find((x) => x.id === id);
+                      if (f) glideToFrame(f);
+                      setSheet({ kind: "screen", frameId: id });
+                    }}
+                    onAdd={() => {
+                      addFrame();
+                      setSheet(null);
+                    }}
+                    onPreview={(id) => openPreview(id)}
+                    onDuplicate={(id) => duplicateFrame(id)}
+                    onDelete={(id) => {
+                      deleteFrame(id);
+                      setSheet(null);
+                    }}
+                  />
+                )}
+                {sheet.kind === "screen" &&
+                  (() => {
+                    const f = frames.find((x) => x.id === sheet.frameId);
+                    if (!f) return null;
+                    return (
+                      <MobileFrameEditor
+                        frame={f}
+                        palette={p}
+                        onChange={(patch) => patchFrame(f.id, patch)}
+                        onDelete={() => {
+                          deleteFrame(f.id);
+                          setSheet(null);
+                        }}
+                        onDuplicate={() => duplicateFrame(f.id)}
+                        onPreview={() => openPreview(f.id)}
+                        prompt={buildPrompt(doc, widths, f.id, lang)}
+                        onSaveImage={() => saveFrameImage(f)}
+                        tidy={tidyState ?? "done"}
+                        onTidy={() => tidy(f)}
+                        onPlace={(pl) => setPlace(f, pl)}
+                        minLength={selectedMinLength}
+                        onLength={(length) => setFrameLength(f.id, length)}
+                        ai={{ ready: aiReady, reason: aiReason, busy: aiBusy && aiFrameId === f.id, onRun: () => runAi("describe", f), onCancel: cancelAi }}
+                        onSize={(preset) => setFramePreset(f.id, preset)}
+                        onClose={() => setSheet(null)}
+                      />
+                    );
+                  })()}
+                {sheet.kind === "prompt" && (
+                  <MobilePromptSheet
+                    doc={doc}
+                    widths={widths}
+                    p={p}
+                    onPatch={(patch) => {
+                      if (patch.title !== undefined) setTitle(patch.title);
+                      if (patch.brief !== undefined) setBrief(patch.brief);
+                      if ("promptEdit" in patch) setPromptEdit(patch.promptEdit);
+                      if ("promptOptions" in patch) setPromptOptions(patch.promptOptions);
+                      if ("platform" in patch) setPlatform(isPlatform(patch.platform) ? patch.platform : null);
+                    }}
+                    onClose={() => setSheet(null)}
+                  />
+                )}
               </BottomSheet>
             )}
           </AnimatePresence>

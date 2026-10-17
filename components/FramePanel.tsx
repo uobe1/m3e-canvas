@@ -50,7 +50,7 @@ const SCREEN_FILLS: ColorToken[] = [
 ];
 
 /** the screen's colour as one connected run: each cell is the colour, and the one worn carries a check */
-function ScreenFillRun({
+export function ScreenFillRun({
   value,
   onChange,
   p,

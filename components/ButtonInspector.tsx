@@ -45,7 +45,7 @@ export type { PlaceFn };
 
 /** the two shapes a FAB takes, as one connected run: the circle and the one with a label.
  *  Picking one turns the part into it, keeping what they share. */
-function FabTypeRow({ value, onChange, p }: { value: FabKind; onChange: (k: FabKind) => void; p: Palette }) {
+export function FabTypeRow({ value, onChange, p }: { value: FabKind; onChange: (k: FabKind) => void; p: Palette }) {
   const lang = useLang();
   const words: Record<FabKind, string> = { fab: t("fabPlain", lang), extendedFab: t("fabExtended", lang) };
   return (
@@ -60,7 +60,7 @@ function FabTypeRow({ value, onChange, p }: { value: FabKind; onChange: (k: FabK
 }
 
 /** a small mark at the start of a row that says which look the row edits: the normal one or the "on" one */
-function StateMark({ on, p, title }: { on: boolean; p: Palette; title: string }) {
+export function StateMark({ on, p, title }: { on: boolean; p: Palette; title: string }) {
   return (
     <span title={title} aria-label={title} style={{ width: 24, flex: "0 0 auto", display: "grid", placeItems: "center", color: on ? p.primary : p.outline }}>
       <Icon name={on ? "check_circle" : "radio_button_unchecked"} size={20} fill={on} />
@@ -70,7 +70,7 @@ function StateMark({ on, p, title }: { on: boolean; p: Palette; title: string })
 
 /** the toggle button itself on a small stage: tapping it flips between its two looks, and the
  *  corner says which one is showing */
-function ToggleStage({ item, shownOn, onPick, p, measured }: { item: Item; shownOn: boolean; onPick: (on: boolean) => void; p: Palette; measured?: number }) {
+export function ToggleStage({ item, shownOn, onPick, p, measured }: { item: Item; shownOn: boolean; onPick: (on: boolean) => void; p: Palette; measured?: number }) {
   const lang = useLang();
   /* the stage keeps the width the button was given; a button wider than the panel is drawn to scale */
   const look: Item = shownOn
