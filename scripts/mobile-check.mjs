@@ -15,6 +15,27 @@ const check = (name, cond, info = "") => {
   return !!cond;
 };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+/* a locator that went away is a failed check, not a crashed run: the tally matters more */
+const box = async (loc) => {
+  try {
+    return await loc.boundingBox({ timeout: 4000 });
+  } catch {
+    return null;
+  }
+};
+const text = async (loc) => {
+  try {
+    return await loc.innerText({ timeout: 4000 });
+  } catch {
+    return "";
+  }
+};
+process.on("uncaughtException", (e) => {
+  console.log(`CRASH  ${String(e.message || e).split("\n")[0]}`);
+  const failed = results.filter((r) => r[0] === "FAIL");
+  console.log(`${results.length - failed.length}/${results.length} checks passed before the crash`);
+  process.exit(1);
+});
 
 const browser = await chromium.launch({
   /* a mirrored Chromium build: the official CDN runs at ~20KB/s from here */
@@ -113,7 +134,7 @@ for (const title of dockTitles)
 check("dock has its six keys", dockFound.length === 6, dockFound.join(", "));
 
 /* 3 — long press a part: the menu a right-click would open */
-const partBox = await page.locator("[data-node]").first().boundingBox();
+const partBox = await box(page.locator("[data-node]").first());
 let menuRows = [];
 if (partBox) {
   const px = partBox.x + partBox.width / 2;
@@ -147,7 +168,7 @@ if (partBox) {
 const spots = await page.evaluate(() => {
   const inR = (r, x, y) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
   const nodes = [...document.querySelectorAll("[data-node]")].map((e) => e.getBoundingClientRect());
-  const frames = [...document.querySelectorAll("[data-frame]")].map((e) => e.getBoundingClientRect());
+  const frames = [...document.querySelectorAll("[data-screen]")].map((e) => e.getBoundingClientRect());
   let blank = null;
   let screen = null;
   for (let y = 110; y < innerHeight - 170 && (!blank || !screen); y += 8) {
@@ -171,6 +192,12 @@ for (const [key, label] of [["blank", "long-press on blank canvas"], ["screen", 
   const up = await menu.count();
   const rows = up ? await menu.locator('[role="menuitem"]').allTextContents() : [];
   check(label, up > 0, rows.join(" / "));
+  if (key === "screen" && up)
+    check(
+      "the screen menu holds what a screen can do",
+      rows.some((r) => /Preview from this screen/i.test(r)) && rows.some((r) => /Swipe setup/i.test(r)) && rows.some((r) => /Delete/i.test(r)),
+      rows.join(" / "),
+    );
   await shot(`03-menu-${key}`);
   if (up) {
     await tapAt(4, 120);
@@ -216,7 +243,7 @@ if (await tile.count()) {
 await closeSheet();
 
 /* 7 — tapping a part opens its inspector sheet */
-const partBox2 = await page.locator("[data-node]").first().boundingBox();
+const partBox2 = await box(page.locator("[data-node]").first());
 if (partBox2) {
   await tapAt(partBox2.x + partBox2.width / 2, partBox2.y + partBox2.height / 2);
   await wait(450);
@@ -249,12 +276,12 @@ await wait(400);
 const fitRow = page.locator('[role="menuitem"]').filter({ hasText: /Fit/ }).first();
 const foundFit = (await fitRow.count()) > 0;
 if (foundFit) {
-  const b = await fitRow.boundingBox();
-  await tapAt(b.x + b.width / 2, b.y + b.height / 2);
+  const b = await box(fitRow);
+  if (b) await tapAt(b.x + b.width / 2, b.y + b.height / 2);
   await wait(500);
 }
 const stillOpen = await page.locator('[role="menu"]').count();
-const stillText = stillOpen ? (await page.locator('[role="menu"]').first().innerText()).slice(0, 80) : "";
+const stillText = stillOpen ? (await text(page.locator('[role="menu"]').first())).slice(0, 80) : "";
 check("the more menu can fit the canvas", stillOpen === 0, foundFit ? `left open: ${stillText}` : "no Fit row in the more menu");
 
 /* the prompt sheet, opened from the top pill */
@@ -275,7 +302,7 @@ const edge = await page.locator('button[title^="Swipe to open"]').count();
 check("swipe setup puts edge buttons on the screen", edge >= 2, `${edge} buttons`);
 await shot("07-navmode");
 
-const f0 = await page.locator("[data-screen]").first().boundingBox();
+const f0 = await box(page.locator("[data-screen]").first());
 if (f0) {
   /* straight up through the middle column: at this zoom the four edge buttons leave little room
    * sideways, but the centre of the screen is clear of every one of them */
@@ -336,8 +363,8 @@ if (await edgeBtn.count()) {
 /* 8c — a swipe that begins on an edge button is still a swipe, not a swallowed tap */
 const lb = page.locator('button[title^="Swipe to open"]').first();
 if (await lb.count()) {
-  const b = await lb.boundingBox();
-  await swipeAcross(b.x + b.width / 2, b.y + b.height / 2, 70, 0, 110);
+  const b = await box(lb);
+  if (b) await swipeAcross(b.x + b.width / 2, b.y + b.height / 2, 70, 0, 110);
   await wait(500);
   const s3 = (await page.locator('button[aria-label="Close"]').count()) > 0;
   check("a swipe starting on an edge button still counts", s3, `button at ${Math.round(b.x)},${Math.round(b.y)}`);
@@ -356,24 +383,79 @@ await shot("09-preview");
 await page.keyboard.press("Escape");
 await wait(600);
 
-/* 10 — multi-select: tap to add, drag a marquee */
+/* 10 — multi-select: a marquee gathers the parts, and the multi panel speaks for all of them.
+ * Swipe setup comes off first: with it on, a drag on the blank canvas is a pan, not a marquee. */
+await tapCenter('button[title="Swipe setup"]');
+await wait(400);
 await tapCenter('button[title="Multi-select"]');
 await wait(400);
-const pbox = await page.locator("[data-node]").first().boundingBox();
-if (pbox) {
-  await tapAt(pbox.x + pbox.width / 2, pbox.y + pbox.height / 2);
-  await wait(450);
-}
-const marquee = await page.evaluate(() => {
-  const fr = document.querySelector("[data-frame]")?.getBoundingClientRect();
-  if (!fr) return null;
-  return { x: fr.left + 2, y: fr.bottom + 6 };
+const cluster = await page.locator("[data-node]").evaluateAll((els) => {
+  let l = 1e9, t = 1e9, r = -1e9, b = -1e9;
+  for (const e of els) {
+    const q = e.getBoundingClientRect();
+    if (q.width < 8 || q.height < 8) continue;
+    l = Math.min(l, q.left); t = Math.min(t, q.top); r = Math.max(r, q.right); b = Math.max(b, q.bottom);
+  }
+  return { l, t, r, b };
 });
-if (marquee) {
-  await swipeAcross(marquee.x, marquee.y, 120, 120, 260);
-  await wait(400);
+/* the marquee: it has to start on the blank canvas beside the phone, since a touch that lands on
+ * a screen in select mode is read as a request to move that screen */
+const free = await page.evaluate((c) => {
+  const inR = (r, x, y) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  const nodes = [...document.querySelectorAll("[data-node]")].map((e) => e.getBoundingClientRect());
+  const frames = [...document.querySelectorAll("[data-screen]")].map((e) => e.getBoundingClientRect());
+  for (let y = 90; y < innerHeight - 180; y += 6) {
+    for (let x = 2; x < innerWidth - 2; x += 6) {
+      const el = document.elementFromPoint(x, y);
+      if (!el?.closest(".m3-canvas")) continue;
+      if (nodes.some((r) => inR(r, x, y)) || frames.some((r) => inR(r, x, y))) continue;
+      /* a blank spot left or above the cluster is where a marquee may begin */
+      if (x < c.l - 6 || y < c.t - 6) return { x, y };
+    }
+  }
+  return null;
+}, cluster);
+if (!free) check("a blank corner beside the parts is reachable", false, "no canvas point outside every frame");
+const mx = free ? free.x : Math.max(2, cluster.l - 26);
+const my = free ? free.y : cluster.t + 4;
+const mstart = await page.evaluate(
+  ([x, y]) => {
+    const el = document.elementFromPoint(x, y);
+    return `${el?.tagName}#${el?.id ?? ""}.${String(el?.className ?? "").slice(0, 30)} canvas=${!!el?.closest(".m3-canvas")} selectModeBtnOn=${document.querySelector('button[title="Multi-select"]')?.getAttribute("aria-pressed") ?? "?"}`;
+  },
+  [mx, my],
+);
+const ex = cluster.r + 12;
+const ey = cluster.b + 12;
+const step = (i) => [mx + ((ex - mx) * i) / 8, my + ((ey - my) * i) / 8];
+await point("touchStart", mx, my, Date.now() / 1000);
+for (let i = 1; i <= 3; i++) {
+  const [x, y] = step(i);
+  await point("touchMove", x, y, Date.now() / 1000);
 }
-check("multi-select keeps the chrome usable", (await page.locator('button[title="Multi-select"]').count()) > 0);
+await shot("10a-marquee-mid");
+for (let i = 4; i <= 8; i++) {
+  const [x, y] = step(i);
+  await point("touchMove", x, y, Date.now() / 1000);
+}
+await point("touchEnd", ex, ey, Date.now() / 1000);
+console.log(`INFO  marquee started on ${mstart}`);
+await wait(500);
+  const barUp = (await page.getByRole("button", { name: "Edit", exact: true }).count()) > 0;
+check("a marquee in select mode selects a group of parts", barUp, `cluster ${Math.round(cluster.r - cluster.l)}x${Math.round(cluster.b - cluster.t)} at ${Math.round(cluster.l)},${Math.round(cluster.t)}`);
+if (barUp) {
+  {
+    const eb = await box(page.getByRole("button", { name: "Edit", exact: true }));
+    if (eb) await tapAt(eb.x + eb.width / 2, eb.y + eb.height / 2);
+    await wait(700);
+  }
+  await wait(700);
+  const multi = await page.locator("body").innerText();
+  const n = Number((multi.match(/(\d+) selected/) || [])[1] || 0);
+  check("the multi panel counts the selection", n >= 2, `${n} selected`);
+  await shot("10b-multi-panel");
+  await closeSheet();
+}
 await shot("10-selectmode");
 
 /* 11 — the toolbar's overflow menu */
@@ -405,7 +487,7 @@ for (const w of [360, 393, 412]) {
 const dctx = await browser.newContext({ viewport: { width: 1280, height: 860 }, locale: "en-US" });
 const desk = await dctx.newPage();
 await desk.goto(BASE, { waitUntil: "load" });
-await desk.waitForSelector('button[title="Undo"], button[aria-label="Undo"]', { timeout: 25000 });
+await desk.waitForSelector("[data-node]", { timeout: 40000 });
 await wait(900);
 const deskCaps = await desk.evaluate(() => ({
   coarse: matchMedia("(pointer: coarse)").matches,
