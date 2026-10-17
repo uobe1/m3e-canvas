@@ -150,6 +150,7 @@ import {
   cancelPress as cancelPressG,
   endPress,
   movePress,
+  resolveIntent,
   type Press,
   type PressZone,
 } from "@/lib/gestures";
@@ -1452,7 +1453,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     e.stopPropagation();
     flushPending();
     armPress(e, "part", { itemId: item.id, frameId: frameOf.get(g.id) ?? null });
-    if (navModeRef.current && e.pointerType === "touch") {
+    if (resolveIntent({ pointerType: e.pointerType, zone: "part", touches: 1, selectMode: selectModeRef.current, navMode: navModeRef.current }) === "swipeNav") {
       /* in swipe-setup a finger over a part belongs to that part's screen: the swipe
        * is the command, selection and dragging stand down */
       e.preventDefault();
@@ -2029,7 +2030,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     armPress(e, "blank", {});
     if (mobileRef.current && e.pointerType === "touch") {
       e.preventDefault();
-      if (selectModeRef.current && !navModeRef.current) {
+      if (resolveIntent({ pointerType: e.pointerType, zone: "blank", touches: 1, selectMode: selectModeRef.current, navMode: navModeRef.current }) === "marquee") {
         /* the touch answer to the desktop's drag-out marquee */
         const pt = toWorld(e.clientX, e.clientY);
         const g: Gesture = { kind: "marquee", x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y, moved: false };
@@ -2070,7 +2071,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     if (mobileRef.current && !selectModeRef.current) {
       e.preventDefault();
       e.stopPropagation();
-      if (navModeRef.current && e.pointerType === "touch") {
+      if (resolveIntent({ pointerType: e.pointerType, zone: "frame", touches: 1, selectMode: selectModeRef.current, navMode: navModeRef.current }) === "swipeNav") {
         startSwipeNav(e, f.id);
         return;
       }
