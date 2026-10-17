@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, useDragControls } from "motion/react";
 import { CONTRASTS, Contrast, FONTS, Item, KIND_SPEC, NavTab, PALETTES, Palette, SHAPES, ShapeScale, Theme, defaultTabsFor, iconSlotsOf, setIconSlot } from "@/lib/tokens";
 import { ensureFontLoaded } from "@/lib/theme";
@@ -19,6 +19,9 @@ export function BottomSheet({ p, onClose, children }: { p: Palette; onClose: () 
   /* the phone keyboard takes the bottom of the screen away: the sheet stands up out of its way
    * by that much, keeping the row being typed in where the thumb already is */
   const [kb, setKb] = useState(0);
+  /* a swipe that ends by opening this sheet lets go with a click of its own right where the
+   * sheet's handle appears: only a touch after the sheet is up may act on it */
+  const armed = useRef(false);
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
@@ -51,6 +54,14 @@ export function BottomSheet({ p, onClose, children }: { p: Palette; onClose: () 
       dragTransition={{ bounceStiffness: 500, bounceDamping: 40 }}
       onDragEnd={(_, info) => {
         if (info.offset.y > 90 || info.velocity.y > 600) onClose();
+      }}
+      onPointerDownCapture={() => {
+        armed.current = true;
+      }}
+      onClickCapture={(e) => {
+        if (armed.current) return;
+        e.preventDefault();
+        e.stopPropagation();
       }}
       onFocusCapture={(e) => {
         const el = e.target as HTMLElement | null;

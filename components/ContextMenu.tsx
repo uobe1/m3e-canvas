@@ -4,6 +4,7 @@
  * the phone gets it from the long-press; the rows are decided by the Editor, this only hangs
  * the menu where the finger sat and takes it away again. */
 
+import { useRef } from "react";
 import { Palette } from "@/lib/tokens";
 import { menuPlacement } from "@/lib/gestures";
 import { Icon } from "./M3Node";
@@ -32,6 +33,9 @@ export function ContextMenu({
 }) {
   const menuW = 240;
   const menuH = rows.length * 48 + 12;
+  /* the finger that held long enough to open this menu lets go with a click of its own, and the
+   * menu is placed right under it: only a touch that arrives after the menu is up may act. */
+  const armed = useRef(false);
   const pos = menuPlacement(
     { left: x - 22, top: y - 22, width: 44, height: 44 },
     { w: window.innerWidth, h: window.innerHeight },
@@ -48,6 +52,14 @@ export function ContextMenu({
       <div
         role="menu"
         aria-orientation="vertical"
+        onPointerDownCapture={() => {
+          armed.current = true;
+        }}
+        onClickCapture={(e) => {
+          if (armed.current) return;
+          e.preventDefault();
+          e.stopPropagation();
+        }}
         style={{
           position: "fixed",
           left: pos.left,
