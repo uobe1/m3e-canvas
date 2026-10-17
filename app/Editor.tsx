@@ -101,7 +101,10 @@ import {
   SNAP_CROSS,
   SNAP_MAIN,
   Transition,
+  SWIPE_DIRS,
+  setFrameSwipe,
   TRANSITIONS,
+  type SwipeDir,
   uid,
   uniformRadii,
   FULL_WIDTH,
@@ -113,7 +116,7 @@ import {
 import { Icon, M3Node, M3Static, MeasuredContent } from "@/components/M3Node";
 import { CORNER_GAIN, CORNERS, HandleSide, SizeHandles } from "@/components/SizeHandles";
 import { LayersPanel } from "@/components/Layers";
-import { FrameSizePicker, Inspector } from "@/components/Inspector";
+import { FrameChips, FrameSizePicker, Inspector } from "@/components/Inspector";
 import { FrameInspector } from "@/components/FramePanel";
 import { Preview } from "@/components/Preview";
 import { Logo } from "@/components/Logo";
@@ -134,7 +137,7 @@ import { ShareDialog } from "@/components/ShareMenu";
 import { ColorPanel } from "@/components/ColorPanel";
 import { MotionPanel, ShapePanel, TypePanel } from "@/components/ThemePanel";
 import { ThemeContext, ensureFontLoaded, ensureLangFontLoaded } from "@/lib/theme";
-import { BottomSheet, MobileActionBar, MobileLang, MobileSettings } from "@/components/Mobile";
+import { BottomSheet, MobileActionBar, MobileLang, MobileSettings, Row } from "@/components/Mobile";
 import { MobileFrameEditor, MobileInspector, MobileLayersSheet, MobileMultiPanel, MobilePartsSheet, MobilePromptSheet, MobileScreensSheet } from "@/components/MobilePanels";
 import { MobileDock } from "@/components/MobileDock";
 import { ContextMenu, type MenuRow } from "@/components/ContextMenu";
@@ -142,6 +145,8 @@ import {
   LONG_PRESS_MS,
   LONG_PRESS_SLOP,
   beginPress,
+  classifySwipe,
+  isSwipeCommand,
   cancelPress as cancelPressG,
   endPress,
   movePress,
@@ -149,7 +154,7 @@ import {
   type PressZone,
 } from "@/lib/gestures";
 import { ConfirmDialog, IconBtn, Segmented } from "@/components/ui";
-import { Lang, LangContext, SEED_TEXT, getLang, setGlobalLang, t, translateDefaultFrameName, translateDefaultText } from "@/lib/i18n";
+import { Lang, LangContext, SEED_TEXT, SWIPE_TEXT, TRANSITION_TEXT, getLang, setGlobalLang, t, translateDefaultFrameName, translateDefaultText } from "@/lib/i18n";
 
 /** the screens while a model drafts: primary, tertiary and primary container, drifting */
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -253,7 +258,8 @@ type Gesture =
       groups: { id: string; x: number; y: number }[];
       moved: boolean;
     }
-  | { kind: "group"; id: string; sx: number; sy: number; gx: number; gy: number; moved: boolean; overBin: boolean; guide?: Guide | null };
+  | { kind: "group"; id: string; sx: number; sy: number; gx: number; gy: number; moved: boolean; overBin: boolean; guide?: Guide | null }
+  | { kind: "swipeNav"; id: string; origin: { x: number; y: number; t: number }; dir: SwipeDir | null };
 
 /** everything in a document apart from its screens and parts */
 type DocMeta = Omit<Doc, "groups" | "frames">;
@@ -1434,6 +1440,19 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     e.stopPropagation();
     flushPending();
     armPress(e, "part", { itemId: item.id, frameId: frameOf.get(g.id) ?? null });
+    if (navModeRef.current && e.pointerType === "touch") {
+      /* in swipe-setup a finger over a part belongs to that part's screen: the swipe
+       * is the command, selection and dragging stand down */
+      e.preventDefault();
+      e.stopPropagation();
+      const fid = frameOf.get(g.id) ?? framesRef.current[0]?.id ?? null;
+      if (fid) {
+        const g2: Gesture = { kind: "swipeNav", id: fid, origin: { x: e.clientX, y: e.clientY, t: e.timeStamp }, dir: null };
+        gestureRef.current = g2;
+        setGesture(g2);
+      }
+      return;
+    }
     if (g.free) {
       setSelectedIds((cur) => (e.shiftKey ? [...cur.filter((x) => !g.items.some((it) => it.id === x)), ...g.items.map((it) => it.id)] : g.items.map((it) => it.id)));
       setSelectedFrameId(null);
@@ -2034,6 +2053,12 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     if (mobileRef.current) {
       e.preventDefault();
       e.stopPropagation();
+      if (navModeRef.current && e.pointerType === "touch") {
+        const g: Gesture = { kind: "swipeNav", id: f.id, origin: { x: e.clientX, y: e.clientY, t: e.timeStamp }, dir: null };
+        gestureRef.current = g;
+        setGesture(g);
+        return;
+      }
       clearSelection();
       startPan(e.clientX, e.clientY);
       return;
@@ -2083,6 +2108,14 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
           x: g.vx + (e.clientX - g.sx),
           y: g.vy + (e.clientY - g.sy),
         }));
+        return;
+      }
+      if (g.kind === "swipeNav") {
+        const guess = classifySwipe(g.origin, { x: e.clientX, y: e.clientY, t: e.timeStamp });
+        if (guess && g.dir !== guess.dir) {
+          g.dir = guess.dir;
+          setGesture({ ...g });
+        }
         return;
       }
       if (g.kind === "group") {
@@ -2170,6 +2203,11 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       const g = gestureRef.current;
       gestureRef.current = null;
       setGesture(null);
+      if (g?.kind === "swipeNav") {
+        const guess = classifySwipe(g.origin, { x: e.clientX, y: e.clientY, t: e.timeStamp });
+        /* a slow pull was meant as a pan; in setup mode it simply comes to nothing */
+        if (guess && isSwipeCommand(guess)) setSheet({ kind: "swipe", frameId: g.id, dir: guess.dir });
+      }
       // a group dragged onto the parts panel is deleted, like a single part
       if (g?.kind === "group" && g.moved && inBin(e.clientX)) {
         setGroups((gs) => gs.filter((x) => x.id !== g.id));
@@ -4535,6 +4573,50 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                           {h > fold && (
                             <div aria-hidden style={{ position: "absolute", left: 0, right: 0, top: fold, borderTop: `2px dashed ${p.outline}`, opacity: 0.6, pointerEvents: "none", zIndex: 2 }} />
                           )}
+                          {isMobile && navMode && (
+                            <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 3 }}>
+                              {SWIPE_DIRS.map((d) => {
+                                const S = 44 / view.z;
+                                const lit = gesture?.kind === "swipeNav" && gesture.id === f.id && gesture.dir === d.key;
+                                const style: React.CSSProperties = {
+                                  position: "absolute",
+                                  width: S,
+                                  height: S,
+                                  borderRadius: S / 2,
+                                  border: "none",
+                                  pointerEvents: "auto",
+                                  cursor: "pointer",
+                                  display: "grid",
+                                  placeItems: "center",
+                                  background: lit ? p.primary : p.surfaceContainerHigh,
+                                  color: lit ? p.onPrimary : p.onSurfaceVariant,
+                                  boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+                                };
+                                if (d.key === "left") Object.assign(style, { left: 6 / view.z, top: h / 2 - S / 2 });
+                                if (d.key === "right") Object.assign(style, { right: 6 / view.z, top: h / 2 - S / 2 });
+                                if (d.key === "up") Object.assign(style, { top: 6 / view.z, left: w / 2 - S / 2 });
+                                if (d.key === "down") Object.assign(style, { bottom: 6 / view.z, left: w / 2 - S / 2 });
+                                return (
+                                  <button
+                                    key={d.key}
+                                    onPointerDown={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSheet({ kind: "swipe", frameId: f.id, dir: d.key });
+                                    }}
+                                    title={`${t("swipeTo", lang)} · ${SWIPE_TEXT[lang][d.key]}`}
+                                    className="m3-press"
+                                    style={style}
+                                  >
+                                    <Icon name={d.icon} size={22 / view.z} />
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
                           {draftBusy && (
                             <div style={{ position: "absolute", inset: 0, zIndex: 90, background: canvasBg, display: "grid", placeItems: "center" }}>
                               <LoadingIndicator size={96} color="url(#m3e-drafting)" />
@@ -4818,6 +4900,29 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
             }}
           />
 
+          {isMobile && navMode && !sheet && (
+            <div
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: 76,
+                transform: "translateX(-50%)",
+                maxWidth: "86%",
+                padding: "8px 14px",
+                borderRadius: 18,
+                background: p.secondaryContainer,
+                color: p.onSecondaryContainer,
+                fontSize: 12,
+                lineHeight: 1.4,
+                textAlign: "center",
+                pointerEvents: "none",
+                zIndex: 41,
+              }}
+            >
+              {t("navModeHint", lang)}
+            </div>
+          )}
+
           {isMobile && (
             <MobileDock
               p={p}
@@ -5001,6 +5106,45 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                         onSize={(preset) => setFramePreset(f.id, preset)}
                         onClose={() => setSheet(null)}
                       />
+                    );
+                  })()}
+                {sheet.kind === "swipe" &&
+                  (() => {
+                    const f = frames.find((x) => x.id === sheet.frameId);
+                    if (!f) return null;
+                    const dir: SwipeDir = sheet.dir ?? "left";
+                    const to = f.swipe?.[dir];
+                    const tr = SWIPE_DIRS.find((d) => d.key === dir)!.transition;
+                    return (
+                      <div>
+                        <Row icon="alt_route" label={t("swipeTo", lang)} p={p}>
+                          <Segmented<SwipeDir>
+                            options={SWIPE_DIRS.map((d) => ({ key: d.key, icon: d.icon, title: SWIPE_TEXT[lang][d.key] }))}
+                            value={dir}
+                            onChange={(k) => setSheet({ kind: "swipe", frameId: f.id, dir: k })}
+                            p={p}
+                            height={44}
+                          />
+                        </Row>
+                        <Row icon="smartphone" label={`${SWIPE_TEXT[lang][dir]} → ${TRANSITION_TEXT[lang][tr]}`} p={p}>
+                          <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <FrameChips
+                                frames={frames.filter((x) => x.id !== f.id)}
+                                value={to ?? null}
+                                onChange={(id) => {
+                                  patchFrame(f.id, { swipe: setFrameSwipe(f, dir, id).swipe });
+                                  setSheet(null);
+                                }}
+                                p={p}
+                                back
+                              />
+                            </div>
+                            {to && <IconBtn icon="close" p={p} size={44} danger onClick={() => patchFrame(f.id, { swipe: setFrameSwipe(f, dir, null).swipe })} title={t("none", lang)} />}
+                          </div>
+                        </Row>
+                        <div style={{ fontSize: 12, lineHeight: 1.5, color: p.onSurfaceVariant, padding: "0 4px", textWrap: "pretty" }}>{t("navModeHint", lang)}</div>
+                      </div>
                     );
                   })()}
                 {sheet.kind === "prompt" && (
