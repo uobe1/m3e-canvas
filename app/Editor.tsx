@@ -136,6 +136,7 @@ import { MotionPanel, ShapePanel, TypePanel } from "@/components/ThemePanel";
 import { ThemeContext, ensureFontLoaded, ensureLangFontLoaded } from "@/lib/theme";
 import { BottomSheet, MobileActionBar, MobileLang, MobileSettings } from "@/components/Mobile";
 import { MobileFrameEditor, MobileInspector, MobileLayersSheet, MobileMultiPanel, MobilePartsSheet, MobilePromptSheet, MobileScreensSheet } from "@/components/MobilePanels";
+import { MobileDock } from "@/components/MobileDock";
 import { ConfirmDialog, IconBtn, Segmented } from "@/components/ui";
 import { Lang, LangContext, SEED_TEXT, getLang, setGlobalLang, t, translateDefaultFrameName, translateDefaultText } from "@/lib/i18n";
 
@@ -611,6 +612,14 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   mobileRef.current = isMobile;
   const sheetRef = useRef(sheet);
   sheetRef.current = sheet;
+  /* dock toggles: nav mode lets a one-finger swipe write Frame.swipe, select mode is the
+   * touch answer to Shift and marquee; neither is persisted -- reload starts neutral */
+  const [navMode, setNavMode] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const navModeRef = useRef(navMode);
+  navModeRef.current = navMode;
+  const selectModeRef = useRef(selectMode);
+  selectModeRef.current = selectMode;
   const lastKindRef = useRef<Kind | null>(null);
   const coarseRef = useRef(coarse);
   coarseRef.current = coarse;
@@ -2718,12 +2727,12 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
 
   /** the screen the tidy button works on: the selected one, or the one under the selected part */
   const tidyTarget = useMemo((): Frame | null => {
-    if (frame !== "phone" || isMobile) return null;
+    if (frame !== "phone") return null;
     if (selectedFrame) return selectedFrame;
     if (!primaryId) return null;
     const g = groups.find((g) => g.items.some((it) => it.id === primaryId));
     return g ? (frameOfGroup(g, frames, widths) ?? null) : null;
-  }, [frame, isMobile, selectedFrame, primaryId, groups, frames, widths]);
+  }, [frame, selectedFrame, primaryId, groups, frames, widths]);
 
   const nextFrameX = () =>
     framesRef.current.length
@@ -4612,7 +4621,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
             note={aiNote}
             onSaveProject={() => saveProject(doc)}
             onOpenProject={() => projectFileRef.current?.click()}
-            onShare={!isMobile ? () => setShareOpen(true) : undefined}
+            onShare={() => setShareOpen(true)}
             shareState={draftBusy ? "busy" : draftBefore ? "review" : "idle"}
             onDraftKeep={keepDraft}
             onDraftUndo={undoDraft}
@@ -4630,31 +4639,17 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
             }}
           />
 
-          {isMobile && !sheet && (
-            <button
-              onClick={() => setSheet({ kind: "parts" })}
-              title={t("parts", lang)}
-              aria-label={t("parts", lang)}
-              className="m3-press"
-              style={{
-                position: "absolute",
-                right: 16,
-                bottom: "calc(16px + var(--bottom-ui, 0px) + env(safe-area-inset-bottom))",
-                width: 64,
-                height: 64,
-                borderRadius: 20,
-                border: "none",
-                background: p.primary,
-                color: p.onPrimary,
-                cursor: "pointer",
-                display: "grid",
-                placeItems: "center",
-                zIndex: 46,
-                boxShadow: "0 6px 18px rgba(0,0,0,0.18)",
-              }}
-            >
-              <Icon name="add" size={32} />
-            </button>
+          {isMobile && (
+            <MobileDock
+              p={p}
+              sheet={sheet?.kind ?? null}
+              onSheet={(k) => setSheet(sheet?.kind === k ? null : { kind: k })}
+              navMode={navMode}
+              onNavMode={() => setNavMode((v) => !v)}
+              selectMode={selectMode}
+              onSelectMode={() => setSelectMode((v) => !v)}
+              onPreview={() => openPreview()}
+            />
           )}
 
           {isMobile && (selected || selectedIds.length > 1 || selectedFrame) && !sheet && (
@@ -4853,7 +4848,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
               style={{
                 position: "absolute",
                 left: "50%",
-                bottom: 96,
+                bottom: "calc(var(--mobile-dock-h) + 22px + var(--bottom-ui, 0px) + env(safe-area-inset-bottom))",
                 transform: "translateX(-50%)",
                 padding: "10px 18px",
                 borderRadius: 20,

@@ -110,14 +110,14 @@ export function Skeleton() {
             <Pill icons={4} />
           </div>
           <div className="m3e-skel-tools m3e-skel-mobile">
-            <Pill icons={5} size={42} tail={112} />
+            <Pill icons={3} size={42} tail={112} />
           </div>
           <span className="m3e-skel-desk">
             <Pill icons={0} tail={104} style={{ position: "absolute", left: 22, bottom: 22 }} />
             <Pill icons={3} style={{ position: "absolute", right: 22, bottom: 22 }} />
           </span>
           <span className="m3e-skel-mobile">
-            <Bone w={56} h={56} r={18} fill="var(--skel-primary)" style={{ position: "absolute", right: 22, bottom: 22, opacity: 0.9 }} />
+            <Pill icons={6} size={44} style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", bottom: 18 }} />
           </span>
         </div>
       </main>

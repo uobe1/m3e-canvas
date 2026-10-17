@@ -144,6 +144,7 @@ export const UI = {
   askAiGenerating: { ja: "作成中…", en: "Drafting…", zh: "生成中…" },
   selectedTab: { ja: "選択中", en: "Selected", zh: "选中项" },
   shareLinkCopy: { ja: "リンクをコピー", en: "Copy link", zh: "复制链接" },
+  shareDesign: { ja: "リンクで共有", en: "Share link", zh: "分享链接" },
   shareLinkHint: { ja: "この設計を開くリンク（画像は含まない）", en: "A link that opens this design (no images)", zh: "打开此设计的链接（不含图片）" },
   replaceProject: {
     ja: "現在のキャンバスは置き換わります。元に戻す (Ctrl+Z) で戻せます。",
@@ -519,7 +520,7 @@ export const KO: Record<UIKey, string> = {
   askAiText: "M3E Canvas 스케치를 만들어 주세요. 먼저 {url}을 읽고 그 절차대로 설계를 JSON으로 구성한 뒤, 공유 링크 형태로 답해 주세요. 코드를 실행할 수 없다면 설계 JSON을 코드 블록으로 답해 주세요(파일로 저장해 불러옵니다). 검증은 필요 없습니다.\n\n만들고 싶은 것: {idea}",
   selectedTab: "선택됨",
  
-  shareLinkCopy: "링크 복사", shareLinkHint: "이 설계를 여는 링크(이미지 제외)",
+  shareLinkCopy: "링크 복사", shareDesign: "링크로 공유", shareLinkHint: "이 설계를 여는 링크(이미지 제외)",
   invalidProject: "프로젝트 파일을 열 수 없습니다.", readOnlyTitle: "다른 탭에서 편집 중입니다",
   readOnlyBody: "이 캔버스는 다른 탭에서 편집 중입니다. 해당 탭을 닫은 다음 이 페이지를 새로고침하세요.",
   reload: "새로고침",

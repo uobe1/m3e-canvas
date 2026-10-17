@@ -285,10 +285,11 @@ export function MobileActionBar({
   const lang = useLang();
   return (
     <div
+      className="m3-chrome"
       style={{
         position: "absolute",
         left: 14,
-        bottom: "calc(16px + var(--bottom-ui, 0px) + env(safe-area-inset-bottom))",
+        bottom: "calc(var(--mobile-dock-h) + 22px + var(--bottom-ui, 0px) + env(safe-area-inset-bottom))",
         display: "flex",
         gap: 4,
         padding: 6,
