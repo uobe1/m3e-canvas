@@ -137,6 +137,17 @@ import { ThemeContext, ensureFontLoaded, ensureLangFontLoaded } from "@/lib/them
 import { BottomSheet, MobileActionBar, MobileLang, MobileSettings } from "@/components/Mobile";
 import { MobileFrameEditor, MobileInspector, MobileLayersSheet, MobileMultiPanel, MobilePartsSheet, MobilePromptSheet, MobileScreensSheet } from "@/components/MobilePanels";
 import { MobileDock } from "@/components/MobileDock";
+import { ContextMenu, type MenuRow } from "@/components/ContextMenu";
+import {
+  LONG_PRESS_MS,
+  LONG_PRESS_SLOP,
+  beginPress,
+  cancelPress as cancelPressG,
+  endPress,
+  movePress,
+  type Press,
+  type PressZone,
+} from "@/lib/gestures";
 import { ConfirmDialog, IconBtn, Segmented } from "@/components/ui";
 import { Lang, LangContext, SEED_TEXT, getLang, setGlobalLang, t, translateDefaultFrameName, translateDefaultText } from "@/lib/i18n";
 
@@ -618,8 +629,18 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   const [selectMode, setSelectMode] = useState(false);
   const navModeRef = useRef(navMode);
   navModeRef.current = navMode;
+  const editAccessRefLike = useRef(editAccess);
+  editAccessRefLike.current = editAccess;
   const selectModeRef = useRef(selectMode);
   selectModeRef.current = selectMode;
+  /* ---------- long-press: a held, still finger answers with the menu the desktop
+   * gets from right-click. It rides beside the existing gesture subsystems rather
+   * than joining them: any of them taking over cancels the press, and if the press
+   * fires first they all let go. ---------- */
+  const [contextMenu, setContextMenu] = useState<{ scope: "part" | "frame" | "blank"; itemId: string | null; frameId: string | null; x: number; y: number } | null>(null);
+  const pressRef = useRef<Press | null>(null);
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pressArmed, setPressArmed] = useState(0);
   const lastKindRef = useRef<Kind | null>(null);
   const coarseRef = useRef(coarse);
   coarseRef.current = coarse;
@@ -1110,6 +1131,55 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   fitRef.current = fit;
 
   /* touch: two fingers pinch-zoom and pan, cancelling whatever one finger started */
+  /* the press: armed by a three-finger-down on a part, the blank canvas or a screen */
+  const cancelPress = useCallback(() => {
+    if (pressTimer.current) clearTimeout(pressTimer.current);
+    pressTimer.current = null;
+    pressRef.current = null;
+  }, []);
+  const firePressRef = useRef<() => void>(() => {});
+  const armPress = useCallback(
+    (e: React.PointerEvent, zone: PressZone, ids: { itemId?: string | null; frameId?: string | null }) => {
+      if (e.pointerType !== "touch") return;
+      if (editAccessRefLike.current !== "editable") return;
+      cancelPress();
+      pressRef.current = beginPress(e.pointerId, zone, { x: e.clientX, y: e.clientY, t: e.timeStamp }, ids);
+      setPressArmed((n) => n + 1);
+      pressTimer.current = setTimeout(() => firePressRef.current(), LONG_PRESS_MS);
+    },
+    [cancelPress],
+  );
+  useEffect(() => {
+    if (!pressArmed) return;
+    const move = (e: PointerEvent) => {
+      const p = pressRef.current;
+      if (!p || e.pointerId !== p.id) return;
+      const next = movePress(p, { x: e.clientX, y: e.clientY, t: e.timeStamp });
+      pressRef.current = next;
+      if (next.canceled) cancelPress();
+    };
+    const up = (e: PointerEvent) => {
+      const p = pressRef.current;
+      if (!p || e.pointerId !== p.id) return;
+      /* a starved timer still lands: a hold long enough is a long-press on release */
+      if (endPress(p, e.timeStamp) === "longPress" && !p.fired) firePressRef.current();
+      cancelPress();
+    };
+    window.addEventListener("pointermove", move, true);
+    window.addEventListener("pointerup", up, true);
+    window.addEventListener("pointercancel", up, true);
+    return () => {
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", up, true);
+      window.removeEventListener("pointercancel", up, true);
+    };
+  }, [pressArmed, cancelPress]);
+
+  useEffect(() => {
+    cancelPress();
+    setContextMenu(null);
+  }, [sheet, previewId, editAccess, cancelPress]);
+
   const onTouchCapture = (e: React.PointerEvent) => {
     if (e.pointerType !== "touch") return;
     touchesRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -1129,6 +1199,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       setPressedId(null);
       gestureRef.current = null;
       setGesture(null);
+      cancelPress();
     }
   };
   useEffect(() => {
@@ -1362,6 +1433,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     e.preventDefault();
     e.stopPropagation();
     flushPending();
+    armPress(e, "part", { itemId: item.id, frameId: frameOf.get(g.id) ?? null });
     if (g.free) {
       setSelectedIds((cur) => (e.shiftKey ? [...cur.filter((x) => !g.items.some((it) => it.id === x)), ...g.items.map((it) => it.id)] : g.items.map((it) => it.id)));
       setSelectedFrameId(null);
@@ -1585,6 +1657,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   const widthDragEnd = useRef<(() => void) | null>(null);
   useEffect(() => () => widthDragEnd.current?.(), []);
   const onWidthHandleDown = (e: React.PointerEvent, g: Group, item: Item, side: HandleSide) => {
+    cancelPress();
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
@@ -1693,14 +1766,18 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       ctrlHeld = e.ctrlKey || e.metaKey;
 
       if (!d.active) {
+        /* touch starts dragging only past the long-press slop, so the two thresholds
+         * agree: a stray wiggle neither fires the menu nor twitches the part */
+        const slop = e.pointerType === "touch" ? LONG_PRESS_SLOP : 5;
         if (
           Math.hypot(pt.x - d.startX, pt.y - d.startY) * viewRef.current.z <
-          5
+          slop
         ) {
           setDrag({ ...d });
           return;
         }
         d.active = true;
+        if (e.pointerType === "touch") cancelPress();
         d.snap = null;
         const id = d.item.id;
         /* the run keeps the hole the part came out of: it closes only once the part is carried
@@ -1921,6 +1998,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   };
 
   const onCanvasPointerDown = (e: React.PointerEvent) => {
+    armPress(e, "blank", {});
     if (mobileRef.current && e.pointerType === "touch") {
       e.preventDefault();
       clearSelection();
@@ -1952,6 +2030,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   /** grab a phone frame by its bezel or label: it carries everything on it;
    *  on a phone the screen stays put and a tap on it just clears the selection */
   const onFramePointerDown = (e: React.PointerEvent, f: Frame) => {
+    armPress(e, "frame", { frameId: f.id });
     if (mobileRef.current) {
       e.preventDefault();
       e.stopPropagation();
@@ -2811,6 +2890,40 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     lastKindRef.current = kind;
   };
 
+  /** the hold became a menu: put down whatever the canvas was doing with this finger,
+   *  pick what was held, and show what can be done to it */
+  const firePress = () => {
+    const p = pressRef.current;
+    if (!p || p.canceled || p.fired) return;
+    p.fired = true;
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+    if (editAccess !== "editable") return;
+    dragRef.current = null;
+    setDrag(null);
+    setPressedId(null);
+    setDragLit(null);
+    gestureRef.current = null;
+    setGesture(null);
+    if (pendingRef.current) flushSync(flushPending);
+    try {
+      navigator.vibrate?.(12);
+    } catch {}
+    if (p.zone === "part" && p.itemId) {
+      setSelectedIds([p.itemId]);
+      setSelectedFrameId(null);
+      setSelectedLinkId(null);
+    } else if (p.zone === "frame" && p.frameId) {
+      setSelectedFrameId(p.frameId);
+      setSelectedIds([]);
+      setSelectedLinkId(null);
+    }
+    setContextMenu({ scope: p.zone === "part" ? "part" : p.zone === "frame" ? "frame" : "blank", itemId: p.itemId, frameId: p.frameId, x: p.origin.x, y: p.origin.y });
+  };
+  firePressRef.current = firePress;
+
   const changeFrame = (f: FrameMode) => {
     if (f === frame) return;
     snapshot();
@@ -3408,6 +3521,14 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
         return;
       }
       if (e.key === "Escape") {
+        if (contextMenu) {
+          setContextMenu(null);
+          return;
+        }
+        if (sheet) {
+          setSheet(null);
+          return;
+        }
         setSelectedIds([]);
         setSelectedFrameId(null);
         setSelectedLinkId(null);
@@ -3664,6 +3785,23 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     setGroups((gs) => [...gs.filter((g) => !inFrame.has(g.id)), ...ordered]);
   };
 
+  /** puts the pressed part's layer at either end of its screen's stack */
+  const moveLayerTo = (itemId: string, where: "front" | "back") => {
+    const g = groupsRef.current.find((x) => x.items.some((it) => it.id === itemId));
+    if (!g || g.locked) return;
+    const fid = frameOf.get(g.id) ?? null;
+    const topFirst = groupsRef.current
+      .filter((x) => (frameOf.get(x.id) ?? null) === fid)
+      .map((x) => x.id)
+      .reverse();
+    const i = topFirst.indexOf(g.id);
+    if (i < 0) return;
+    topFirst.splice(i, 1);
+    if (where === "front") topFirst.unshift(g.id);
+    else topFirst.push(g.id);
+    reorderLayers(topFirst);
+  };
+
   /** flips a group's lock from its row's lock icon in the Layers panel */
   const toggleGroupLock = (id: string) => {
     snapshot();
@@ -3916,6 +4054,47 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       w: (r?.width ?? 0) / view.z,
       h: (r?.height ?? 0) / view.z,
     };
+  })();
+
+  const contextRows: MenuRow[] = (() => {
+    if (!contextMenu) return [];
+    const mk = (key: string, icon: string, label: string, onClick: () => void, danger?: boolean): MenuRow => ({ key, icon, label, onClick, danger });
+    if (contextMenu.scope === "part" && contextMenu.itemId) {
+      const it = groups.flatMap((g) => g.items).find((x) => x.id === contextMenu.itemId) ?? null;
+      if (!it) return [];
+      const rows = [
+        mk("edit", "tune", t("edit", lang), () => setSheet({ kind: "edit" })),
+        mk("duplicate", "content_copy", t("duplicate", lang), duplicateSelected),
+        mk("copy", "copy_all", t("copySelection", lang), copySelected),
+      ];
+      if (clipboardRef.current) rows.push(mk("paste", "content_paste", t("pasteHere", lang), pasteClipboard));
+      rows.push(mk("layer", "vertical_align_top", t("bringFront", lang), () => moveLayerTo(it.id, "front")));
+      rows.push(mk("layer", "vertical_align_bottom", t("sendBack", lang), () => moveLayerTo(it.id, "back")));
+      const g = groups.find((x) => x.items.some((it2) => it2.id === it.id));
+      if (g) {
+        if (g.free) rows.push(mk("ungroup", "ungroup", t("ungroup", lang), ungroupSelected));
+        else if (groups.length > 1) rows.push(mk("group", "group_work", t("makeGroup", lang), groupSelected));
+      }
+      rows.push(mk("lock", it && g?.locked ? "lock_open" : "lock", t(g?.locked ? "unlock" : "lock", lang), toggleLockSelected));
+      rows.push(mk("delete", "delete", t("delete", lang), deleteSelected, true));
+      return rows;
+    }
+    if (contextMenu.scope === "frame" && contextMenu.frameId) {
+      const fid = contextMenu.frameId;
+      return [
+        mk("screen", "tune", t("edit", lang), () => setSheet({ kind: "screen", frameId: fid })),
+        mk("preview", "play_arrow", t("previewFrom", lang), () => openPreview(fid)),
+        mk("duplicate", "content_copy", t("duplicate", lang), () => duplicateFrame(fid)),
+        mk("swipe", "alt_route", t("navMode", lang), () => setSheet({ kind: "swipe", frameId: fid })),
+        mk("delete", "delete", t("delete", lang), () => deleteFrame(fid), true),
+      ];
+    }
+    const rows = [
+      mk("parts", "add_box", t("parts", lang), () => setSheet({ kind: "parts" })),
+      mk("fit", "fit_screen", t("fit", lang), fit),
+    ];
+    if (clipboardRef.current) rows.push(mk("paste", "content_paste", t("pasteHere", lang), pasteClipboard));
+    return rows;
   })();
 
   return (
@@ -4842,6 +5021,10 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
               </BottomSheet>
             )}
           </AnimatePresence>
+
+          {contextMenu && (
+            <ContextMenu p={p} x={contextMenu.x} y={contextMenu.y} rows={contextRows} onClose={() => setContextMenu(null)} />
+          )}
 
           {toast && (
             <div

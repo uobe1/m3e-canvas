@@ -331,6 +331,7 @@ export const UI = {
   targetAndroid: { ja: "Android のネイティブアプリとして作る", en: "Build as a native Android app", zh: "作为 Android 原生应用构建" },
   targetWeb: { ja: "ブラウザで動く Web アプリとして作る", en: "Build as a web app that runs in the browser", zh: "作为在浏览器中运行的 Web 应用构建" },
   copyPrompt: { ja: "プロンプトをコピー", en: "Copy prompt", zh: "复制提示词" },
+  copySelection: { ja: "コピー", en: "Copy", zh: "复制" },
   // preview
   back: { ja: "戻る", en: "Back", zh: "返回" },
   close: { ja: "閉じる", en: "Close", zh: "关闭" },
@@ -520,7 +521,7 @@ export const KO: Record<UIKey, string> = {
   askAiText: "M3E Canvas 스케치를 만들어 주세요. 먼저 {url}을 읽고 그 절차대로 설계를 JSON으로 구성한 뒤, 공유 링크 형태로 답해 주세요. 코드를 실행할 수 없다면 설계 JSON을 코드 블록으로 답해 주세요(파일로 저장해 불러옵니다). 검증은 필요 없습니다.\n\n만들고 싶은 것: {idea}",
   selectedTab: "선택됨",
  
-  shareLinkCopy: "링크 복사", shareDesign: "링크로 공유", shareLinkHint: "이 설계를 여는 링크(이미지 제외)",
+  shareLinkCopy: "링크 복사", shareDesign: "링크로 공유", copySelection: "복사", shareLinkHint: "이 설계를 여는 링크(이미지 제외)",
   invalidProject: "프로젝트 파일을 열 수 없습니다.", readOnlyTitle: "다른 탭에서 편집 중입니다",
   readOnlyBody: "이 캔버스는 다른 탭에서 편집 중입니다. 해당 탭을 닫은 다음 이 페이지를 새로고침하세요.",
   reload: "새로고침",
