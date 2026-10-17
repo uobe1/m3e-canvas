@@ -4,7 +4,7 @@ import { ReactNode, useMemo, useState } from "react";
 import { Reorder, useDragControls } from "motion/react";
 import { Frame, Group, Item, KIND_SPEC, Palette, explodeGroup, isPhoneFrame } from "@/lib/tokens";
 import { Icon } from "./M3Node";
-import { Select } from "./ui";
+import { Select, useCoarse } from "./ui";
 import { Lang, KIND_TEXT, t, useLang } from "@/lib/i18n";
 
 /* Rows never animate their size: opening a row only adds rows under it, so
@@ -61,8 +61,9 @@ function Row({
   children?: ReactNode;
 }) {
   const lang = useLang();
+  const coarse = useCoarse();
   const controls = useDragControls();
-  const h = depth === 0 ? 40 : 36;
+  const h = (depth === 0 ? 40 : 36) + (coarse ? 8 : 0);
   return (
     <Reorder.Item value={id} layout="position" transition={{ layout: { duration: 0 } }} dragListener={false} dragControls={controls} onDragStart={() => onDragging(true)} onDragEnd={() => onDragging(false)} style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 4, position: "relative" }}>
       <div
@@ -115,7 +116,7 @@ function Row({
             aria-label={t(locked ? "unlock" : "lock", lang)}
             aria-pressed={!!locked}
             className="m3-press"
-            style={{ width: 28, height: 28, borderRadius: 14, border: "none", background: "transparent", color: locked ? (on ? p.onSecondaryContainer : p.primary) : p.outline, cursor: "pointer", padding: 0, display: "grid", placeItems: "center", flex: "0 0 auto" }}
+            style={{ width: coarse ? 40 : 28, height: coarse ? 40 : 28, borderRadius: 14, border: "none", background: "transparent", color: locked ? (on ? p.onSecondaryContainer : p.primary) : p.outline, cursor: "pointer", padding: 0, display: "grid", placeItems: "center", flex: "0 0 auto" }}
           >
             <Icon name={locked ? "lock" : "lock_open"} size={20} fill={locked} />
           </button>
@@ -126,7 +127,7 @@ function Row({
             title={t(open ? "hideParts" : "showParts", lang)}
             aria-expanded={open}
             className="m3-press"
-            style={{ width: 28, height: 28, borderRadius: 14, border: "none", background: "transparent", color: on ? p.onSecondaryContainer : p.onSurfaceVariant, cursor: "pointer", padding: 0, display: "grid", placeItems: "center", flex: "0 0 auto" }}
+            style={{ width: coarse ? 40 : 28, height: coarse ? 40 : 28, borderRadius: 14, border: "none", background: "transparent", color: on ? p.onSecondaryContainer : p.onSurfaceVariant, cursor: "pointer", padding: 0, display: "grid", placeItems: "center", flex: "0 0 auto" }}
           >
             <span style={{ display: "inline-flex", transform: open ? "rotate(90deg)" : "none", transition: "transform 160ms" }}>
               <Icon name="chevron_right" size={20} />

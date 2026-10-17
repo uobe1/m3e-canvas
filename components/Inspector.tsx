@@ -26,7 +26,7 @@ import { ButtonInspector } from "./ButtonInspector";
 import { PartInspector } from "./PartInspector";
 import { AlignBox, PartMenu, PlaceFn } from "./PartPanel";
 import { Icon } from "./M3Node";
-import { PanelShell, Section, Segmented } from "./ui";
+import { PanelShell, Section, Segmented, useCoarse } from "./ui";
 import { TRANSITION_TEXT, t, useLang } from "@/lib/i18n";
 
 export function variantsOf(kind: Kind): { key: Variant; label: string }[] {
@@ -161,7 +161,7 @@ export function FrameSizePicker({
   );
 }
 
-function FrameChips({
+export function FrameChips({
   frames,
   value,
   onChange,
@@ -178,7 +178,8 @@ function FrameChips({
   small?: boolean;
 }) {
   const lang = useLang();
-  const h = small ? 32 : 36;
+  const coarse = useCoarse();
+  const h = Math.max(small ? 32 : 36, coarse ? 44 : 0);
   const chip = (id: string | null, label: string, icon: string) => {
     const on = value === id;
     return (

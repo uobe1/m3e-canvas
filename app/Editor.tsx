@@ -122,7 +122,7 @@ import { PromptPanel } from "@/components/PromptPanel";
 import { GitHubLink, Mode, Toolbar } from "@/components/Toolbar";
 import { LangMenu } from "@/components/Menus";
 import { AiActionKey, AiPanel, aiErrorText } from "@/components/AiPanel";
-import { TidyState, PANEL_FADE_H } from "@/components/ui";
+import { CoarseContext, TidyState, PANEL_FADE_H } from "@/components/ui";
 import { AiSettings, DEFAULT_AI, hasKey, isSecureUrl, loadAiSettings, proposeBehavior, proposeDescription, pushHistory, saveAiSettings } from "@/lib/ai";
 import { barSlotOf, bodyRect, carryFrame, holdsEdgeBar, maxFrameLength, minFrameLength, pullInto, stretchFrame, tidyFrame } from "@/lib/tidy";
 import { constrainModalRails, modalRailOf, updateRail } from "@/lib/rail";
@@ -488,6 +488,10 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     futureRef.current = futureRef.current.map((snap) => translateSnapshot(snap, next));
   };
   const [isMobile, setIsMobile] = useState(false);
+  /* layout is one thing, input is another: a wide tablet has fingers too. Everything that
+   * arms long-presses or sizes a hit box listens to `coarse`; everything that picks the
+   * phone chrome listens to `isMobile`. */
+  const [coarse, setCoarse] = useState(false);
   const [sheet, setSheet] = useState<"edit" | "settings" | "lang" | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   /** frame being rendered offscreen for the PNG export */
@@ -597,6 +601,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   frameRef.current = frame;
   const mobileRef = useRef(isMobile);
   mobileRef.current = isMobile;
+  const coarseRef = useRef(coarse);
+  coarseRef.current = coarse;
   /** active touch points, for pinch zoom */
   const touchesRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const pinchRef = useRef<{
@@ -878,6 +884,15 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
         setViewReady(true);
       });
     };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  /* the input capability, asked separately from the layout breakpoint */
+  useEffect(() => {
+    const mq = window.matchMedia("(pointer: coarse)");
+    const apply = () => setCoarse(mq.matches);
     apply();
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
@@ -3883,6 +3898,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
   return (
     <LangContext.Provider value={lang}>
     <ThemeContext.Provider value={theme}>
+    <CoarseContext.Provider value={coarse}>
       <div
         className={`app-root${revealing ? " m3e-reveal" : ""}${widthDragId || sizeEditId ? " m3-size-now" : ""}`}
         /* the preview sits outside this tree and owns the keyboard while it is up */
@@ -4202,8 +4218,11 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
         >
           <div
             ref={canvasRef}
+            className="m3-canvas"
             onPointerDown={onCanvasPointerDown}
             onPointerDownCapture={onTouchCapture}
+            /* on touch the long-press menu replaces the browser's own hold menu */
+            onContextMenu={coarse ? (e) => e.preventDefault() : undefined}
             style={{
               position: "absolute",
               inset: isMobile ? 6 : 8,
@@ -4334,10 +4353,10 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                           onKeyDown={(e) => onLengthHandleKey(e, f)}
                           style={{
                             position: "absolute",
-                            left: w / 2 - 32,
+                            left: w / 2 - Math.max(32, 44 / view.z),
                             top: h - 4,
-                            width: 64,
-                            height: BEZEL + 8,
+                            width: Math.max(64, 88 / view.z),
+                            height: Math.max(BEZEL + 8, 44 / view.z),
                             display: "grid",
                             placeItems: "center",
                             transform: `scale(${clamp(1 / view.z, 1, 2)})`,
@@ -4425,7 +4444,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                           d={l.d}
                           fill="none"
                           stroke="transparent"
-                          strokeWidth={18 / view.z}
+                          strokeWidth={Math.max(18, coarse ? 44 : 18) / view.z}
                           style={{ pointerEvents: "stroke", cursor: "pointer" }}
                           onPointerDown={(e) => {
                             e.stopPropagation();
@@ -4986,6 +5005,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
             </div>
         </div>
       )}
+    </CoarseContext.Provider>
     </ThemeContext.Provider>
     </LangContext.Provider>
   );

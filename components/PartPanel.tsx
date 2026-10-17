@@ -38,7 +38,7 @@ import {
 import { Lang } from "@/lib/i18n";
 import { Icon, boxStyle } from "./M3Node";
 import { IconPicker } from "./IconPicker";
-import { CornerIcon, Field, IconBtn, RUN_CELL, Section, Segmented, Select, SelectOption, Slider } from "./ui";
+import { CornerIcon, Field, IconBtn, RUN_CELL, Section, Segmented, Select, SelectOption, Slider, useCoarse } from "./ui";
 import { AiHooks, variantsOf } from "./Inspector";
 import { LinkStage, TapStage } from "./TapStage";
 import { COLOR_TOKEN_TEXT, KIND_TEXT, t, useLang } from "@/lib/i18n";
@@ -252,6 +252,7 @@ export function PartMenu({
     ...(onToggleLock ? [{ key: "lock", icon: locked ? "lock_open" : "lock", label: t(locked ? "unlock" : "lock", lang), onClick: onToggleLock }] : []),
     { key: "delete", icon: "delete", label: deleteLabel ?? t("delete", lang), danger: true, onClick: onDelete },
   ];
+  const coarse = useCoarse();
   return (
     <div ref={box} style={{ position: "relative", flex: "0 0 auto" }}>
       <IconBtn icon="more_vert" p={p} on={open} onClick={() => setOpen((o) => !o)} title={t("more", lang)} size={32} hasPopup="menu" expanded={open} />
@@ -284,7 +285,7 @@ export function PartMenu({
               className="m3-press"
               style={{
                 width: "100%",
-                height: 40,
+                height: coarse ? 48 : 40,
                 padding: "0 10px",
                 border: "none",
                 borderRadius: 8,

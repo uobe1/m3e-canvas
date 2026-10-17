@@ -416,3 +416,20 @@ input.m3-number {
   }
 }
 
+
+/* touch: the editor owns a held finger on the canvas -- no browser callout, no magnifier,
+   no selection menu leaking through a long-press meant for the context menu */
+.m3-canvas,
+.m3-canvas * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* chrome beside the canvas: a double tap must not zoom the page out from under toWorld() */
+.m3-chrome {
+  touch-action: manipulation;
+}
+/* the mobile dock: one definition for fit insets, sheets, the action bar and the toast */
+:root {
+  --mobile-dock-h: 64px;
+}

@@ -8,12 +8,13 @@ import { KIND_TEXT, LANGS, Lang, t, useLang } from "@/lib/i18n";
 import { IconPicker } from "./IconPicker";
 import { Icon } from "./M3Node";
 import { VariantSwatch, variantsOf } from "./Inspector";
-import { Field, IconBtn, Segmented, Toggle } from "./ui";
+import { Field, IconBtn, Segmented, Toggle, useCoarse } from "./ui";
 
 /** Sheet that slides up from the bottom edge; the canvas above stays usable.
  *  Dragging the handle moves the sheet with the finger; a flick or a long pull closes it. */
 export function BottomSheet({ p, onClose, children }: { p: Palette; onClose: () => void; children: React.ReactNode }) {
   const lang = useLang();
+  const coarse = useCoarse();
   const controls = useDragControls();
   return (
     <motion.div
@@ -51,7 +52,7 @@ export function BottomSheet({ p, onClose, children }: { p: Palette; onClose: () 
         onPointerDown={(e) => controls.start(e)}
         aria-label={t("close", lang)}
         style={{
-          height: 30,
+          height: coarse ? 44 : 30,
           border: "none",
           background: "transparent",
           display: "grid",

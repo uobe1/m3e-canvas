@@ -1,10 +1,17 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { COLOR_TOKENS, ColorToken, PLACES, Palette, Place, R_INNER, SETTLE_MS, clamp, draftGradient } from "@/lib/tokens";
 import { AnimatePresence, animate, motion, useReducedMotion } from "motion/react";
 import { COLOR_TOKEN_TEXT, t, useLang } from "@/lib/i18n";
 import { Icon } from "./M3Node";
+
+/* A coarse pointer needs a larger hit box than the control's visual — the canvas answers
+ * matchMedia("(pointer: coarse)") once and shares it here. Fingers, not screen size:
+ * a wide iPad has no mouse either. */
+export const CoarseContext = createContext(false);
+export const useCoarse = () => useContext(CoarseContext);
+export const MIN_TOUCH = 44;
 
 /** the row of tabs and the clear gap under it, and the band a panel with no tabs fades its top with */
 const PANEL_TABS_H = 48;
@@ -278,6 +285,9 @@ export function IconBtn({
   hasPopup?: "menu" | "listbox";
   expanded?: boolean;
 }) {
+  const coarse = useCoarse();
+  /* on touch the hit box grows to 44 while the painted disc keeps the size the layout asks for */
+  const box = coarse ? Math.max(size, MIN_TOUCH) : size;
   return (
     <button
       aria-haspopup={hasPopup}
@@ -288,25 +298,36 @@ export function IconBtn({
       disabled={disabled}
       className="m3-press"
       style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
+        width: box,
+        height: box,
         border: "none",
-        background: on ? (danger ? p.errorContainer : p.secondaryContainer) : "transparent",
-        color: disabled
-          ? p.outlineVariant
-          : danger
-            ? p.error
-            : on
-              ? p.onSecondaryContainer
-              : p.onSurfaceVariant,
+        background: "transparent",
+        padding: 0,
         cursor: disabled ? "default" : "pointer",
         display: "grid",
         placeItems: "center",
         flex: "0 0 auto",
       }}
     >
-      <Icon name={icon} size={Math.round(size * 0.58)} fill={fill ?? on} />
+      <span
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          background: on ? (danger ? p.errorContainer : p.secondaryContainer) : "transparent",
+          color: disabled
+            ? p.outlineVariant
+            : danger
+              ? p.error
+              : on
+                ? p.onSecondaryContainer
+                : p.onSurfaceVariant,
+          display: "grid",
+          placeItems: "center",
+        }}
+      >
+        <Icon name={icon} size={Math.round(size * 0.58)} fill={fill ?? on} />
+      </span>
     </button>
   );
 }
@@ -647,6 +668,7 @@ export function Field({
   describedBy?: string;
 }) {
   const lang = useLang();
+  const coarse = useCoarse();
   const filled = value.length > 0;
   const areaRef = useRef<HTMLTextAreaElement>(null);
   const reduced = useReducedMotion();
@@ -841,7 +863,9 @@ export function Field({
     border: "none",
     background: p.surfaceContainerHigh,
     color: p.onSurface,
-    fontSize: 14,
+    /* iOS zooms the whole page to focus a field under 16px, which throws the canvas's
+     * screen-to-world math off: on touch the text grows to the zoom-free size */
+    fontSize: coarse ? 16 : 14,
     lineHeight: multiline ? 1.55 : undefined,
     outline: "none",
     boxSizing: "border-box",
@@ -1498,6 +1522,7 @@ export function Tile({
   compact?: boolean;
 }) {
   const lang = useLang();
+  const coarse = useCoarse();
   return (
     <div className="m3-tile" style={{ position: "relative", display: "flex", borderRadius: 16 }}>
       <button
@@ -1567,10 +1592,10 @@ export function Tile({
           aria-label={starred ? t("removeFavorite", lang) : t("addFavorite", lang)}
           style={{
             position: "absolute",
-            top: 4,
-            right: 4,
-            width: 24,
-            height: 24,
+            top: coarse ? 0 : 4,
+            right: coarse ? 0 : 4,
+            width: coarse ? 40 : 24,
+            height: coarse ? 40 : 24,
             borderRadius: 12,
             border: "none",
             background: "transparent",
@@ -1579,7 +1604,8 @@ export function Tile({
             cursor: "pointer",
             display: "grid",
             placeItems: "center",
-            opacity: starred ? 1 : undefined,
+            /* no hover on touch: the star stays lit, bigger, and tappable */
+            opacity: coarse || starred ? 1 : undefined,
           }}
         >
           <Icon name="star" size={16} fill={starred} />
@@ -1592,6 +1618,8 @@ export function Tile({
 /** palette-role swatches; the dot shows the real color of the current theme */
 /** One 30dp color disc; the selected one wears the primary ring */
 function TokenDisc({ color, label, on, onClick, p, icon, iconColor }: { color: string; label: string; on: boolean; onClick: () => void; p: Palette; icon?: string; iconColor?: string }) {
+  const coarse = useCoarse();
+  const box = coarse ? MIN_TOUCH : 34;
   return (
     <button
       onClick={onClick}
@@ -1600,21 +1628,32 @@ function TokenDisc({ color, label, on, onClick, p, icon, iconColor }: { color: s
       aria-pressed={on}
       className="m3-press"
       style={{
-        width: 30,
-        height: 30,
-        borderRadius: 15,
-        border: `1px solid ${p.outlineVariant}`,
+        width: box,
+        height: box,
+        border: "none",
         padding: 0,
+        background: "transparent",
         cursor: "pointer",
-        background: color,
-        color: iconColor,
         display: "grid",
         placeItems: "center",
-        outline: on ? `2px solid ${p.primary}` : "2px solid transparent",
-        outlineOffset: 2,
       }}
     >
-      {icon && <Icon name={icon} size={16} />}
+      <span
+        style={{
+          width: 30,
+          height: 30,
+          borderRadius: 15,
+          border: `1px solid ${p.outlineVariant}`,
+          background: color,
+          color: iconColor,
+          display: "grid",
+          placeItems: "center",
+          outline: on ? `2px solid ${p.primary}` : "2px solid transparent",
+          outlineOffset: 2,
+        }}
+      >
+        {icon && <Icon name={icon} size={16} />}
+      </span>
     </button>
   );
 }

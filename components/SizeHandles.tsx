@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { animate } from "motion/react";
 import { Palette, SETTLE_MS, SIZE_HANDLE_Z, clamp, lerp } from "@/lib/tokens";
 import { t, useLang } from "@/lib/i18n";
+import { useCoarse } from "./ui";
 
 /** which edge a button is held by, or which point around an icon button's circle */
 export type HandleSide = "left" | "right" | "top" | "bottom" | "tl" | "tr" | "bl" | "br";
@@ -48,6 +49,7 @@ export function SizeHandles({
   onNudge: (side: HandleSide, dir: 1 | -1) => void;
 }) {
   const lang = useLang();
+  const coarse = useCoarse();
   const [shown, setShown] = useState(box);
   const at = useRef(box);
   /* the box is read as its four edges, so a new box -- and only a new box -- starts the easing */
@@ -99,10 +101,29 @@ export function SizeHandles({
     if (key === "ArrowUp") return up ? 1 : down ? -1 : 0;
     return 0;
   };
-  const handle = (side: HandleSide, x: number, y: number, dw: number, dh: number, cursor: string, title: string) => (
+  const handle = (side: HandleSide, x: number, y: number, dw: number, dh: number, cursor: string, title: string) => {
+    /* on touch the hit box must reach 44dp without swallowing the part's own body -- the part
+     * itself is what a finger drags -- so all the extra padding grows OUTWARD, away from the
+     * center, and only the drawn dot stays pinned to the edge it holds */
+    const innerX = dw / 2 + PAD;
+    const innerY = dh / 2 + PAD;
+    const baseW = dw + PAD * 2;
+    const baseH = dh + PAD * 2;
+    const wantW = coarse ? Math.max(baseW, 44 / z) : baseW;
+    const wantH = coarse ? Math.max(baseH, 44 / z) : baseH;
+    const awayX = side === "left" || side === "tl" || side === "bl" ? -1 : side === "right" || side === "tr" || side === "br" ? 1 : 0;
+    const awayY = side === "top" || side === "tl" || side === "tr" ? -1 : side === "bottom" || side === "bl" || side === "br" ? 1 : 0;
+    const outerX = awayX === 0 ? wantW / 2 : Math.max(PAD, wantW - innerX);
+    const outerY = awayY === 0 ? wantH / 2 : Math.max(PAD, wantH - innerY);
+    const boxL = awayX === 0 ? x - wantW / 2 : awayX < 0 ? x - outerX : x - innerX;
+    const boxT = awayY === 0 ? y - wantH / 2 : awayY < 0 ? y - outerY : y - innerY;
+    const boxW = awayX === 0 ? wantW : innerX + outerX;
+    const boxH = awayY === 0 ? wantH : innerY + outerY;
+    return (
     <button
       key={side}
       type="button"
+      data-handle=""
       /* the canvas behind the handle hears nothing of the press: the drag is the handle's own */
       onPointerDown={(e) => {
         e.stopPropagation();
@@ -119,15 +140,13 @@ export function SizeHandles({
       aria-label={title}
       style={{
         position: "absolute",
-        left: x - dw / 2 - PAD,
-        top: y - dh / 2 - PAD,
-        width: dw + PAD * 2,
-        height: dh + PAD * 2,
+        left: boxL,
+        top: boxT,
+        width: boxW,
+        height: boxH,
         padding: 0,
         border: "none",
         background: "transparent",
-        display: "grid",
-        placeItems: "center",
         cursor,
         zIndex: SIZE_HANDLE_Z,
         touchAction: "none",
@@ -135,6 +154,9 @@ export function SizeHandles({
     >
       <span
         style={{
+          position: "absolute",
+          left: x - dw / 2 - boxL,
+          top: y - dh / 2 - boxT,
           width: dw,
           height: dh,
           borderRadius: Math.min(dw, dh),
@@ -144,7 +166,8 @@ export function SizeHandles({
         }}
       />
     </button>
-  );
+    );
+  };
 
   if (round) {
     /* each point sits where its diagonal crosses the corner it is nearest. On a circle that is

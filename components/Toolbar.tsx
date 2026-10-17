@@ -140,6 +140,7 @@ export function Toolbar({
     const S = 42;
     return (
       <div
+        className="m3-chrome"
         style={{
           position: "absolute",
           left: 0,
