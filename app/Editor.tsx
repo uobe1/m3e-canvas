@@ -188,6 +188,9 @@ const MAX_Z = 3;
  *  toolbar's row at the top, a margin elsewhere */
 const GLIDE_TOP = 84;
 const GLIDE_PAD = 40;
+/** the phone's bottom dock (globals.css `--mobile-dock-h`) and the gap under it: a screen glided
+ *  to on a phone stops above the dock instead of hiding its foot behind it */
+const GLIDE_BOTTOM_PHONE = 64 + 26;
 const HISTORY_MAX = 100;
 const DOC_KEY = "m3e:doc";
 /** the design a draft or a link replaced, until the author keeps or undoes it */
@@ -3439,11 +3442,12 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     const boxW = w + BEZEL * 2;
     const boxH = h + BEZEL * 2 + FRAME_LABEL_H;
     const v = viewRef.current;
+    const bottom = mobileRef.current ? GLIDE_BOTTOM_PHONE : GLIDE_PAD;
     const left = (f.x - BEZEL) * v.z + v.x;
     const top = (f.y - BEZEL - FRAME_LABEL_H) * v.z + v.y;
-    if (left >= GLIDE_PAD && top >= GLIDE_TOP && left + boxW * v.z <= r.width - GLIDE_PAD && top + boxH * v.z <= r.height - GLIDE_PAD) return;
-    const z = clamp(Math.min((r.width - GLIDE_PAD * 2) / boxW, (r.height - GLIDE_TOP - GLIDE_PAD) / boxH, v.z), MIN_Z, MAX_Z);
-    glide({ x: (r.width - boxW * z) / 2 - (f.x - BEZEL) * z, y: GLIDE_TOP + (r.height - GLIDE_TOP - GLIDE_PAD - boxH * z) / 2 - (f.y - BEZEL - FRAME_LABEL_H) * z, z });
+    if (left >= GLIDE_PAD && top >= GLIDE_TOP && left + boxW * v.z <= r.width - GLIDE_PAD && top + boxH * v.z <= r.height - bottom) return;
+    const z = clamp(Math.min((r.width - GLIDE_PAD * 2) / boxW, (r.height - GLIDE_TOP - bottom) / boxH, v.z), MIN_Z, MAX_Z);
+    glide({ x: (r.width - boxW * z) / 2 - (f.x - BEZEL) * z, y: GLIDE_TOP + (r.height - GLIDE_TOP - bottom - boxH * z) / 2 - (f.y - BEZEL - FRAME_LABEL_H) * z, z });
   };
   const openPreview = (startId?: string | null) => {
     if (frame !== "phone") {
