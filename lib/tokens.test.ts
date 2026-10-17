@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { DEFAULT_THEME, R_FULL, baseRadii, makeItem, normalizeTheme, railLayoutWidth, railMetrics, runCorners, scaleR, setGlobalShape, sizeOf, isScrollableTabs, tabScrollOffset, removeTabPatch, tabCountPatch, SCROLL_TAB_W, type Item } from "./tokens";
+import { DEFAULT_THEME, R_FULL, baseRadii, frameSwipeEntries, makeItem, normalizeTheme, railLayoutWidth, railMetrics, runCorners, scaleR, setFrameSwipe, setGlobalShape, sizeOf, isScrollableTabs, tabScrollOffset, removeTabPatch, tabCountPatch, SCROLL_TAB_W, type Frame, type Item } from "./tokens";
 
 afterEach(() => setGlobalShape("rounded")); // restore the module default
 
@@ -128,5 +128,38 @@ describe("scrollable tab rows", () => {
     expect(tabScrollOffset(row(7, 4), 412)).toBe(5.5 * SCROLL_TAB_W - 412);
     expect(tabScrollOffset(row(7, 6), 412)).toBe(7 * SCROLL_TAB_W - 412);
     expect(tabScrollOffset(row(7, 6), 1280)).toBe(0);
+  });
+});
+
+describe("setFrameSwipe", () => {
+  const frame = (over: Partial<Frame> = {}): Frame => ({ id: "a", name: "A", x: 0, y: 0, ...over });
+
+  it("links a direction to another screen and overwrites the same direction", () => {
+    const one = setFrameSwipe(frame(), "left", "b");
+    expect(one.swipe).toEqual({ left: "b" });
+    expect(setFrameSwipe(one, "left", "c").swipe).toEqual({ left: "c" });
+    expect(setFrameSwipe(one, "up", "d").swipe).toEqual({ left: "b", up: "d" });
+  });
+
+  it("refuses to link a screen to itself", () => {
+    expect(setFrameSwipe(frame(), "left", "a").swipe).toBeUndefined();
+  });
+
+  it("dropping the last direction leaves swipe undefined, the shape the frame-delete cleanup uses", () => {
+    const linked = setFrameSwipe(setFrameSwipe(frame(), "left", "b"), "up", "c");
+    const oneLeft = setFrameSwipe(linked, "up", null);
+    expect(oneLeft.swipe).toEqual({ left: "b" });
+    expect(Object.prototype.hasOwnProperty.call(setFrameSwipe(oneLeft, "left", undefined), "swipe")).toBe(true);
+    expect(setFrameSwipe(oneLeft, "left", undefined).swipe).toBeUndefined();
+  });
+
+  it("lists every direction, set or not, in the editor's order", () => {
+    const f = setFrameSwipe(frame(), "down", "b");
+    expect(frameSwipeEntries(f)).toEqual([
+      { dir: "left", to: undefined },
+      { dir: "right", to: undefined },
+      { dir: "up", to: undefined },
+      { dir: "down", to: "b" },
+    ]);
   });
 });

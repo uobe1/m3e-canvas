@@ -1739,6 +1739,19 @@ export const SWIPE_DIRS: { key: SwipeDir; icon: string; transition: Transition }
   { key: "down", icon: "swipe_down", transition: "slideDown" },
 ];
 
+/** where a swipe on this screen leads; clearing a direction, or pointing it at the screen
+ *  itself, removes the key — the same shape as the cleanup that runs when a frame is deleted */
+export function setFrameSwipe(f: Frame, dir: SwipeDir, to: string | null | undefined): Frame {
+  const next: Partial<Record<SwipeDir, string>> = { ...f.swipe };
+  if (!to || to === f.id) delete next[dir];
+  else next[dir] = to;
+  return { ...f, swipe: Object.keys(next).length ? next : undefined };
+}
+
+/** every swipe direction of a frame, set or not, in the order the editor lists them */
+export const frameSwipeEntries = (f: Frame): { dir: SwipeDir; to?: string }[] =>
+  SWIPE_DIRS.map((d) => ({ dir: d.key, to: f.swipe?.[d.key] }));
+
 /** how a sliding transition moves: the axis, where the new screen enters from and
  *  where the old one parks, as fractions of the screen */
 export const SLIDE_SPEC: Partial<Record<Transition, { axis: "x" | "y"; enter: number; exit: number }>> = {

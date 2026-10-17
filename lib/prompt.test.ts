@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { Lang, setGlobalLang } from "./i18n";
+import { Lang, SWIPE_TEXT, setGlobalLang } from "./i18n";
 import { buildPrompt } from "./prompt";
 import { BACK_TARGET, DEFAULT_THEME, Doc, Item, Platform, defaultTabs, makeItem, paletteOf } from "./tokens";
 
@@ -469,5 +469,18 @@ describe("a screen whose body scrolls", () => {
   it.each(LANGS)("says nothing of scrolling for a screen the device holds (%s)", (lang) => {
     expect(prompt(lang)).not.toContain(SCROLLS[lang]);
     expect(prompt(lang, 892)).not.toContain(SCROLLS[lang]);
+  });
+});
+
+describe("swipe navigation", () => {
+  it.each(LANGS)("tells the prompt where a swipe on a screen leads in %s", (lang) => {
+    setGlobalLang(lang);
+    const doc = fixture();
+    doc.frames = [...doc.frames, { id: "f-two", name: "Two", x: 500, y: 0 }];
+    doc.frames[0] = { ...doc.frames[0], swipe: { left: "f-two" } };
+    const prompt = buildPrompt(doc, {}, undefined, lang);
+    expect(prompt).toContain(SWIPE_TEXT[lang].left);
+    expect(prompt).toContain("Two");
+    expect(prompt).not.toContain(SWIPE_TEXT[lang].right);
   });
 });
