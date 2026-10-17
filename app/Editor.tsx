@@ -1426,6 +1426,15 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     landTimer.current = setTimeout(() => setLanded(null), 50);
   };
 
+  /** the one-finger swipe that links a screen's edge in swipe setup. Every surface of the screen
+   *  hands a held finger to it -- the body, a part, and the edge button itself, which is otherwise
+   *  the one place a swipe can start on and be swallowed by the tap. */
+  const startSwipeNav = (e: React.PointerEvent, frameId: string) => {
+    const g: Gesture = { kind: "swipeNav", id: frameId, origin: { x: e.clientX, y: e.clientY, t: e.timeStamp }, dir: null };
+    gestureRef.current = g;
+    setGesture(g);
+  };
+
   const onItemPointerDown = (
     e: React.PointerEvent,
     g: Group,
@@ -1449,11 +1458,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       e.preventDefault();
       e.stopPropagation();
       const fid = frameOf.get(g.id) ?? framesRef.current[0]?.id ?? null;
-      if (fid) {
-        const g2: Gesture = { kind: "swipeNav", id: fid, origin: { x: e.clientX, y: e.clientY, t: e.timeStamp }, dir: null };
-        gestureRef.current = g2;
-        setGesture(g2);
-      }
+      if (fid) startSwipeNav(e, fid);
       return;
     }
     const addOn = e.shiftKey || (selectModeRef.current && e.pointerType === "touch");
@@ -2066,9 +2071,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       e.preventDefault();
       e.stopPropagation();
       if (navModeRef.current && e.pointerType === "touch") {
-        const g: Gesture = { kind: "swipeNav", id: f.id, origin: { x: e.clientX, y: e.clientY, t: e.timeStamp }, dir: null };
-        gestureRef.current = g;
-        setGesture(g);
+        startSwipeNav(e, f.id);
         return;
       }
       clearSelection();
@@ -4119,8 +4122,8 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
         mk("copy", "copy_all", t("copySelection", lang), copySelected),
       ];
       if (clipboardRef.current) rows.push(mk("paste", "content_paste", t("pasteHere", lang), pasteClipboard));
-      rows.push(mk("layer", "vertical_align_top", t("bringFront", lang), () => moveLayerTo(it.id, "front")));
-      rows.push(mk("layer", "vertical_align_bottom", t("sendBack", lang), () => moveLayerTo(it.id, "back")));
+      rows.push(mk("front", "vertical_align_top", t("bringFront", lang), () => moveLayerTo(it.id, "front")));
+      rows.push(mk("back", "vertical_align_bottom", t("sendBack", lang), () => moveLayerTo(it.id, "back")));
       const g = groups.find((x) => x.items.some((it2) => it2.id === it.id));
       if (g) {
         if (g.free) rows.push(mk("ungroup", "ungroup", t("ungroup", lang), ungroupSelected));
@@ -4615,6 +4618,9 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
                                     onPointerDown={(e) => {
                                       e.preventDefault();
                                       e.stopPropagation();
+                                      /* the button answers a tap, but a finger that travels on it
+                                       * means the same swipe it would have made across the screen */
+                                      if (e.pointerType === "touch") startSwipeNav(e, f.id);
                                     }}
                                     onClick={(e) => {
                                       e.stopPropagation();
