@@ -4902,6 +4902,12 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
             onSettings={() => setSheet(sheet?.kind === "theme" ? null : { kind: "theme" })}
             onLangSheet={() => setSheet(sheet?.kind === "lang" ? null : { kind: "lang" })}
             onPrompt={async () => {
+              /* on a phone the button opens the prompt panel as a sheet: the copy sits inside it,
+               * where the app name, the brief and the options can be set too */
+              if (isMobile) {
+                setSheet(sheet?.kind === "prompt" ? null : { kind: "prompt" });
+                return;
+              }
               try {
                 await navigator.clipboard.writeText(effectivePrompt(doc, widths, lang));
                 showToast(t("copied", lang), 1400, "check");

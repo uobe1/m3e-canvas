@@ -217,7 +217,7 @@ export function Toolbar({
           </Popover>
           <button
             onClick={onPrompt}
-            title={t("copyPrompt", lang)}
+            title={t("prompt", lang)}
             className="m3-press"
             style={{
               height: S,
