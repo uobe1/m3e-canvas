@@ -1453,8 +1453,9 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
       }
       return;
     }
+    const addOn = e.shiftKey || (selectModeRef.current && e.pointerType === "touch");
     if (g.free) {
-      setSelectedIds((cur) => (e.shiftKey ? [...cur.filter((x) => !g.items.some((it) => it.id === x)), ...g.items.map((it) => it.id)] : g.items.map((it) => it.id)));
+      setSelectedIds((cur) => (addOn ? [...cur.filter((x) => !g.items.some((it) => it.id === x)), ...g.items.map((it) => it.id)] : g.items.map((it) => it.id)));
       setSelectedFrameId(null);
       setSelectedLinkId(null);
       setRightTab("edit");
@@ -1472,7 +1473,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     sx.jump(left);
     sy.jump(top);
     setSelectedIds((cur) =>
-      e.shiftKey ? [...cur.filter((x) => x !== item.id), item.id] : [item.id],
+      addOn ? [...cur.filter((x) => x !== item.id), item.id] : [item.id],
     );
     setSelectedFrameId(null);
     setSelectedLinkId(null);
@@ -2020,6 +2021,14 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
     armPress(e, "blank", {});
     if (mobileRef.current && e.pointerType === "touch") {
       e.preventDefault();
+      if (selectModeRef.current && !navModeRef.current) {
+        /* the touch answer to the desktop's drag-out marquee */
+        const pt = toWorld(e.clientX, e.clientY);
+        const g: Gesture = { kind: "marquee", x0: pt.x, y0: pt.y, x1: pt.x, y1: pt.y, moved: false };
+        gestureRef.current = g;
+        setGesture(g);
+        return;
+      }
       clearSelection();
       startPan(e.clientX, e.clientY);
       return;
@@ -2050,7 +2059,7 @@ export default function Editor({ initialLang, onReady }: { initialLang: Lang; on
    *  on a phone the screen stays put and a tap on it just clears the selection */
   const onFramePointerDown = (e: React.PointerEvent, f: Frame) => {
     armPress(e, "frame", { frameId: f.id });
-    if (mobileRef.current) {
+    if (mobileRef.current && !selectModeRef.current) {
       e.preventDefault();
       e.stopPropagation();
       if (navModeRef.current && e.pointerType === "touch") {
